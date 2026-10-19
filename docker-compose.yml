@@ -1,0 +1,28 @@
+services:
+  secretdock:
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+    image: secretdock:latest
+    container_name: secretdock
+    restart: unless-stopped
+    ports:
+      # Bind to localhost only; put nginx/Caddy in front for HTTPS.
+      - "127.0.0.1:${HOST_PORT:-8080}:8080"
+    environment:
+      - APP_VERSION=${APP_VERSION:-dev}
+      # Optional: base64-encoded 32-byte master key for data encryption.
+      # If unset, SecretDock generates one on first start and saves it to
+      # <dataDir>/.master_key (0600) — back this file up, losing it loses all data.
+      # (Generate one manually with: docker run --rm secretdock:latest /secretdock genkey)
+      - SECRETDOCK_MASTER_KEY=${SECRETDOCK_MASTER_KEY:-}
+      # Set to 1 when serving over HTTPS (so cookies get the Secure flag).
+      - SECRETDOCK_SECURE_COOKIES=1
+    volumes:
+      # All persistent data lives in ./data (SQLite DB, images, files, master key).
+      # Back up this directory to keep everything.
+      - ./data:/data
+      # Optional: mount a host directory for scheduled encrypted backups,
+      # then set the backup directory in Settings -> Backup.
+      # - ./backup:/backup:rw

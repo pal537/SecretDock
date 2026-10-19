@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <rect x="2" y="2" width="92" height="92" rx="26" fill="#1e3a5f"/>
+  <!-- shackle: perfect arch -->
+  <path d="M34 46 V38 a14 14 0 0 1 28 0 V46" fill="none" stroke="#e8eef5" stroke-width="6" stroke-linecap="round"/>
+  <!-- body: rounded rect -->
+  <rect x="28" y="44" width="40" height="30" rx="10" fill="#e8eef5"/>
+  <!-- keyhole -->
+  <circle cx="48" cy="56" r="5" fill="#1e3a5f"/>
+  <path d="M46 59 L44 68 L52 68 L50 59 Z" fill="#1e3a5f"/>
+</svg>
