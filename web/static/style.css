@@ -439,6 +439,18 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 .modal.wide.ssh-modal .ssh-win > * { min-width: 0; }
 .ssh-win-head > * { min-width: 0; }
 
+/* 窗格容器必须是块级全宽：若是横向 flex，窗格按终端画布定宽、终端又按
+   窗格量尺寸，两边互相参照会越缩越小（终端框缩成一条的真因）。 */
+.ssh-win-body { display: block; }
+.ssh-pane { width: 100%; }
+
+/* 触屏设备（iPad 等）：SSH 窗口钉在屏幕内、四边留 10px，物理上不超屏。
+   只匹配粗指针设备，鼠标驱动的 PC 永远不触发，桌面布局不受影响。 */
+@media (pointer: coarse) and (max-width: 1400px) {
+  .modal.wide.ssh-modal { position: absolute; inset: 10px; max-width: none; max-height: none; }
+  .modal.wide.ssh-modal .ssh-win { width: 100%; max-width: 100%; height: 100%; max-height: none; }
+}
+
 .md-preview h1,.md-preview h2,.md-preview h3 { margin: 12px 0 8px; }
 .md-preview p { margin: 8px 0; line-height: 1.6; }
 .md-preview code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: Menlo,Consolas,monospace; font-size: 13px; }
