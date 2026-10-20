@@ -89,6 +89,7 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 
 // Routes registers all routes on mux.
 func (s *Server) Routes(mux *http.ServeMux) {
+	go s.resumeAIVideos()
 	mux.HandleFunc("/api/setup/status", s.handleSetupStatus)
 	mux.HandleFunc("/api/setup", s.handleSetup)
 	mux.HandleFunc("/api/change-password", s.requireAuth(s.handleChangePassword))
@@ -175,6 +176,18 @@ func (s *Server) Routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("/api/menu-icon", s.requireAuth(s.handleMenuIconFetch))
 	mux.HandleFunc("/menu-icons/", s.requireAuth(s.handleMenuIconFile))
+
+	// AI module
+	mux.HandleFunc("/api/ai/configs", s.requireAuth(s.handleAIConfigs))
+	mux.HandleFunc("/api/ai/configs/", s.requireAuth(s.handleAIConfigOne))
+	mux.HandleFunc("/api/ai/threads", s.requireAuth(s.handleAIThreads))
+	mux.HandleFunc("/api/ai/threads/", s.requireAuth(s.handleAIThreadOne))
+	mux.HandleFunc("/api/ai/chat", s.requireAuth(s.handleAIChat))
+	mux.HandleFunc("/api/ai/upload", s.requireAuth(s.handleAIUpload))
+	mux.HandleFunc("/api/ai/files/", s.requireAuth(s.handleAIFile))
+	mux.HandleFunc("/api/ai/meta", s.requireAuth(s.handleAIMeta))
+	mux.HandleFunc("/api/ai/stats", s.requireAuth(s.handleAIStats))
+	mux.HandleFunc("/api/ai/cleanup", s.requireAuth(s.handleAICleanup))
 	mux.HandleFunc("/logos/", s.requireAuth(s.handleLogoFile))
 	mux.HandleFunc("/static/", s.checkIPPolicyMiddleware(s.handleStatic()))
 	mux.HandleFunc("/", s.checkIPPolicyMiddleware(s.handleIndex()))

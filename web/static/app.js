@@ -132,6 +132,7 @@ const browserCfg = { enabled: false, url: '', pwd: '' };
 /* ---------- sidebar menu: order / visibility / custom links ---------- */
 const MENU_ITEMS = [
   { id: 'browser', label: '远程浏览器', icon: 'monitor' },
+  { id: 'ai', label: 'AI', icon: 'bot' },
   { id: 'merchants', label: '机密库', icon: 'vault' },
   { id: 'scripts', label: '脚本', icon: 'code' },
   { id: 'links', label: '网址', icon: 'link' },
@@ -2418,6 +2419,7 @@ async function renderView() {
   const main = v ? v.closest('.main') : null;
   if (main) main.style.cssText = '';
   if (state.view === 'settings') await renderSettings();
+  else if (state.view === 'ai') await renderAI();
   else if (state.view === 'browser') renderBrowser();
   else if (typeof state.view === 'string' && state.view.startsWith('lnk-')) renderLinkView();
   else if (state.view === 'scripts') await renderScripts();

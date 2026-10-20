@@ -1,0 +1,388 @@
+[
+ {
+  "id": "openai",
+  "name": "OpenAI",
+  "name_cn": "OpenAI",
+  "format": "openai",
+  "base_url": "https://api.openai.com/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "gpt-5",
+   "gpt-5-mini",
+   "gpt-4.1",
+   "gpt-4o"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "sk- 开头",
+  "logo": "openai.svg",
+  "desc": "GPT 系列官方接口，综合能力最强"
+ },
+ {
+  "id": "anthropic",
+  "name": "Anthropic",
+  "name_cn": "Anthropic（Claude）",
+  "format": "anthropic",
+  "base_url": "https://api.anthropic.com",
+  "chat_path": "/v1/messages",
+  "models_path": "/v1/models",
+  "headers": {
+   "anthropic-version": "2023-06-01"
+  },
+  "models": [
+   "claude-opus-4-5",
+   "claude-sonnet-4-5",
+   "claude-haiku-4-5"
+  ],
+  "native_search": true,
+  "balance": null,
+  "key_hint": "sk-ant- 开头",
+  "logo": "anthropic.svg",
+  "desc": "Claude 系列，长文本与代码见长，自带联网搜索"
+ },
+ {
+  "id": "google",
+  "name": "Google Gemini",
+  "name_cn": "谷歌双子星",
+  "format": "openai",
+  "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "gemini-2.5-pro",
+   "gemini-2.5-flash",
+   "gemini-2.5-flash-lite"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "Google AI Studio 获取",
+  "logo": "google.svg",
+  "desc": "Gemini 系列，多模态与超长上下文"
+ },
+ {
+  "id": "xai",
+  "name": "xAI",
+  "name_cn": "xAI（Grok）",
+  "format": "openai",
+  "base_url": "https://api.x.ai",
+  "chat_path": "/v1/chat/completions",
+  "models_path": "/v1/models",
+  "models": [
+   "grok-4",
+   "grok-4-1-fast"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "xai- 开头",
+  "logo": "xai.svg",
+  "desc": "马斯克旗下 Grok 系列模型"
+ },
+ {
+  "id": "mistral",
+  "name": "Mistral AI",
+  "name_cn": "Mistral",
+  "format": "openai",
+  "base_url": "https://api.mistral.ai/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "mistral-large-latest",
+   "mistral-medium-latest"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "Mistral 控制台获取",
+  "logo": "mistral.svg",
+  "desc": "欧洲开源系大模型厂商"
+ },
+ {
+  "id": "groq",
+  "name": "Groq",
+  "name_cn": "Groq",
+  "format": "openai",
+  "base_url": "https://api.groq.com/openai/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "llama-3.3-70b-versatile",
+   "openai/gpt-oss-120b"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "gsk_ 开头",
+  "logo": "groq.svg",
+  "desc": "自研 LPU 芯片，推理速度极快"
+ },
+ {
+  "id": "perplexity",
+  "name": "Perplexity",
+  "name_cn": "Perplexity",
+  "format": "openai",
+  "base_url": "https://api.perplexity.ai",
+  "chat_path": "/chat/completions",
+  "models_path": "",
+  "models": [
+   "sonar",
+   "sonar-pro"
+  ],
+  "native_search": true,
+  "balance": null,
+  "key_hint": "pplx- 开头",
+  "logo": "perplexity.svg",
+  "desc": "Sonar 系列模型自带联网搜索，选它即联网问答"
+ },
+ {
+  "id": "openrouter",
+  "name": "OpenRouter",
+  "name_cn": "OpenRouter",
+  "format": "openai",
+  "base_url": "https://openrouter.ai/api/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "anthropic/claude-sonnet-4-5"
+  ],
+  "native_search": false,
+  "balance": {
+   "method": "GET",
+   "url": "https://openrouter.ai/api/v1/auth/key",
+   "balance_path": "data.limit-data.usage"
+  },
+  "key_hint": "sk-or- 开头",
+  "logo": "openrouter.svg",
+  "desc": "聚合网关，一个 Key 调用各家模型"
+ },
+ {
+  "id": "azure",
+  "name": "Azure OpenAI",
+  "name_cn": "微软 Azure",
+  "format": "openai",
+  "base_url": "",
+  "chat_path": "/openai/deployments/{deployment}/chat/completions?api-version=2025-01-01-preview",
+  "models_path": "",
+  "models": [],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "Azure 门户获取，需填自己的部署地址",
+  "logo": "azure.svg",
+  "desc": "微软云上的 OpenAI 服务，企业合规首选"
+ },
+ {
+  "id": "together",
+  "name": "Together AI",
+  "name_cn": "Together",
+  "format": "openai",
+  "base_url": "https://api.together.xyz/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "deepseek-ai/DeepSeek-V3.2"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "Together 控制台获取",
+  "logo": "together.svg",
+  "desc": "开源模型云托管平台"
+ },
+ {
+  "id": "deepseek",
+  "name": "DeepSeek",
+  "name_cn": "深度求索",
+  "format": "openai",
+  "base_url": "https://api.deepseek.com",
+  "chat_path": "/v1/chat/completions",
+  "models_path": "/v1/models",
+  "models": [
+   "deepseek-chat",
+   "deepseek-reasoner"
+  ],
+  "native_search": false,
+  "balance": {
+   "method": "GET",
+   "url": "https://api.deepseek.com/user/balance",
+   "balance_path": "data.balance_infos.0.total_balance"
+  },
+  "key_hint": "sk- 开头",
+  "logo": "deepseek.svg",
+  "desc": "国产性价比之王，V 系列通用、R 系列推理"
+ },
+ {
+  "id": "qwen",
+  "name": "通义千问",
+  "name_cn": "阿里",
+  "format": "openai",
+  "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "qwen-max",
+   "qwen-plus",
+   "qwen-flash",
+   "qwen3-max"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "阿里云百炼获取",
+  "logo": "qwen.svg",
+  "desc": "阿里云大模型，中文能力扎实"
+ },
+ {
+  "id": "zhipu",
+  "name": "智谱 GLM",
+  "name_cn": "智谱",
+  "format": "openai",
+  "base_url": "https://open.bigmodel.cn/api/paas/v4",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "glm-4.5",
+   "glm-4.5-air",
+   "glm-4.6"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "智谱开放平台获取",
+  "logo": "zhipu.svg",
+  "desc": "智谱 GLM 系列，国产老牌厂商"
+ },
+ {
+  "id": "moonshot",
+  "name": "Moonshot Kimi",
+  "name_cn": "月之暗面",
+  "format": "openai",
+  "base_url": "https://api.moonshot.cn/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "kimi-k2",
+   "kimi-k2-thinking"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "sk- 开头",
+  "logo": "moonshot.svg",
+  "desc": "Kimi 系列，超长上下文著称"
+ },
+ {
+  "id": "doubao",
+  "name": "豆包",
+  "name_cn": "字节跳动",
+  "format": "openai",
+  "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "火山引擎控制台获取",
+  "logo": "doubao.svg",
+  "desc": "火山引擎方舟平台，需填推理接入点模型"
+ },
+ {
+  "id": "wenxin",
+  "name": "文心",
+  "name_cn": "百度",
+  "format": "openai",
+  "base_url": "https://qianfan.baidubce.com/v2",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "ernie-4.5",
+   "ernie-x1"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "百度智能云千帆获取",
+  "logo": "wenxin.svg",
+  "desc": "百度文心大模型，千帆平台接入"
+ },
+ {
+  "id": "hunyuan",
+  "name": "混元",
+  "name_cn": "腾讯",
+  "format": "openai",
+  "base_url": "https://api.hunyuan.cloud.tencent.com/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "hunyuan-turbos-latest"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "腾讯云控制台获取",
+  "logo": "hunyuan.svg",
+  "desc": "腾讯混元大模型"
+ },
+ {
+  "id": "minimax",
+  "name": "MiniMax",
+  "name_cn": "稀宇科技",
+  "format": "openai",
+  "base_url": "https://api.minimax.io/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "MiniMax-M2"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "MiniMax 开放平台获取",
+  "logo": "minimax.svg",
+  "desc": "MiniMax 系列，长上下文与推理"
+ },
+ {
+  "id": "siliconflow",
+  "name": "硅基流动",
+  "name_cn": "硅基流动",
+  "format": "openai",
+  "base_url": "https://api.siliconflow.cn/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "deepseek-ai/DeepSeek-V3.2",
+   "deepseek-ai/DeepSeek-R1",
+   "Qwen/Qwen3-VL-32B-Instruct",
+   "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "sk- 开头",
+  "logo": "siliconflow.svg",
+  "desc": "国产模型聚合平台，开源模型齐全、速度快"
+ },
+ {
+  "id": "yi",
+  "name": "零一万物",
+  "name_cn": "零一万物",
+  "format": "openai",
+  "base_url": "https://api.lingyiwanwu.com/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "yi-lightning"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "零一万物开放平台获取",
+  "logo": "yi.svg",
+  "desc": "Yi 系列模型，响应快"
+ },
+ {
+  "id": "baichuan",
+  "name": "百川智能",
+  "name_cn": "百川",
+  "format": "openai",
+  "base_url": "https://api.baichuan-ai.com/v1",
+  "chat_path": "/chat/completions",
+  "models_path": "/models",
+  "models": [
+   "Baichuan4"
+  ],
+  "native_search": false,
+  "balance": null,
+  "key_hint": "百川开放平台获取",
+  "logo": "baichuan.svg",
+  "desc": "百川大模型，中文与医疗见长"
+ }
+]

@@ -402,6 +402,11 @@ func Open(path string) (*DB, error) {
 		sqldb.Close()
 		return nil, err
 	}
+	// AI module tables (configs / threads / tree messages)
+	if err := ensureAITables(&DB{sqldb}); err != nil {
+		sqldb.Close()
+		return nil, err
+	}
 	// migrate: scripts used to have merchant_id FK; scripts are top-level now
 	var fkCount int
 	if err := sqldb.QueryRow(`SELECT COUNT(*) FROM pragma_foreign_key_list('scripts')`).Scan(&fkCount); err == nil && fkCount > 0 {
