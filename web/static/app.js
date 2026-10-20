@@ -131,8 +131,8 @@ const state = { view: 'merchants', merchants: [], cur: null, secrets: [], q: '',
 const browserCfg = { enabled: false, url: '', pwd: '' };
 /* ---------- sidebar menu: order / visibility / custom links ---------- */
 const MENU_ITEMS = [
-  { id: 'browser', label: '远程浏览器', icon: 'monitor' },
   { id: 'ai', label: 'AI', icon: 'bot' },
+  { id: 'browser', label: '远程浏览器', icon: 'monitor' },
   { id: 'merchants', label: '机密库', icon: 'vault' },
   { id: 'scripts', label: '脚本', icon: 'code' },
   { id: 'links', label: '网址', icon: 'link' },
