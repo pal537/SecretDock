@@ -93,6 +93,8 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 			Port       int    `json:"port"`
 			Username   string `json:"username"`
 			Password   string `json:"password"`
+			PrivKey    string `json:"privKey"`
+			KeyPass    string `json:"keyPass"`
 			Country    string `json:"country"`
 			Region     string `json:"region"`
 		}
@@ -101,8 +103,12 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Host = strings.TrimSpace(req.Host)
-		if req.Host == "" || req.Password == "" {
-			fail(w, 400, "主机和密码不能为空")
+		if req.Host == "" {
+			fail(w, 400, "主机不能为空")
+			return
+		}
+		if req.Password == "" && strings.TrimSpace(req.PrivKey) == "" {
+			fail(w, 400, "密码和私钥至少填一个")
 			return
 		}
 		if req.Port <= 0 || req.Port > 65535 {
@@ -120,7 +126,24 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 			fail(w, 500, "加密失败")
 			return
 		}
-		id, err := s.DB.CreateSSHHost(req.CategoryID, strings.TrimSpace(req.Name), req.Host, req.Port, req.Username, enc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region))
+		keyEnc, keyPassEnc := "", ""
+		if strings.TrimSpace(req.PrivKey) != "" {
+			k, err := crypto.Encrypt(s.EncKey, []byte(strings.TrimSpace(req.PrivKey)))
+			if err != nil {
+				fail(w, 500, "加密失败")
+				return
+			}
+			keyEnc = k
+			if req.KeyPass != "" {
+				kp, err := crypto.Encrypt(s.EncKey, []byte(req.KeyPass))
+				if err != nil {
+					fail(w, 500, "加密失败")
+					return
+				}
+				keyPassEnc = kp
+			}
+		}
+		id, err := s.DB.CreateSSHHost(req.CategoryID, strings.TrimSpace(req.Name), req.Host, req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region))
 		if err != nil {
 			fail(w, 500, err.Error())
 			return
@@ -142,6 +165,9 @@ func (s *Server) handleSSHHostOne(w http.ResponseWriter, r *http.Request) {
 			Port       int    `json:"port"`
 			Username   string `json:"username"`
 			Password   string `json:"password"` // 空表示不改
+			PrivKey    string `json:"privKey"`  // 空表示不改
+			KeyPass    string `json:"keyPass"`  // 随私钥一同保存
+			ClearKey   bool   `json:"clearKey"` // true 清除已存私钥
 			Country    string `json:"country"`
 			Region     string `json:"region"`
 		}
@@ -158,7 +184,24 @@ func (s *Server) handleSSHHostOne(w http.ResponseWriter, r *http.Request) {
 			}
 			enc = e
 		}
-		if err := s.DB.UpdateSSHHost(id, req.CategoryID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Host), req.Port, req.Username, enc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region)); err != nil {
+		keyEnc, keyPassEnc := "", ""
+		if strings.TrimSpace(req.PrivKey) != "" {
+			k, err := crypto.Encrypt(s.EncKey, []byte(strings.TrimSpace(req.PrivKey)))
+			if err != nil {
+				fail(w, 500, "加密失败")
+				return
+			}
+			keyEnc = k
+			if req.KeyPass != "" {
+				kp, err := crypto.Encrypt(s.EncKey, []byte(req.KeyPass))
+				if err != nil {
+					fail(w, 500, "加密失败")
+					return
+				}
+				keyPassEnc = kp
+			}
+		}
+		if err := s.DB.UpdateSSHHost(id, req.CategoryID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Host), req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region), req.ClearKey); err != nil {
 			fail(w, 500, err.Error())
 			return
 		}
@@ -235,6 +278,20 @@ func (s *Server) sshClientFor(id int64) (*ssh.Client, db.SSHHost, error) {
 	if err != nil {
 		return nil, h, fmt.Errorf("密码解密失败")
 	}
+	var privKey, keyPass string
+	if h.PrivKeyEnc != "" {
+		k, err := crypto.Decrypt(s.EncKey, h.PrivKeyEnc)
+		if err != nil {
+			return nil, h, fmt.Errorf("私钥解密失败")
+		}
+		privKey = string(k)
+		if h.KeyPassEnc != "" {
+			kp, err := crypto.Decrypt(s.EncKey, h.KeyPassEnc)
+			if err == nil {
+				keyPass = string(kp)
+			}
+		}
+	}
 	// 主机指纹存在 settings 里：ssh_fp_<id>
 	fp := s.DB.GetSetting(fmt.Sprintf("ssh_fp_%d", id))
 	client, gotFP, err := sshmgr.Dial(sshmgr.HostInfo{
@@ -242,6 +299,8 @@ func (s *Server) sshClientFor(id int64) (*ssh.Client, db.SSHHost, error) {
 		Port:     h.Port,
 		Username: h.Username,
 		Password: string(pw),
+		PrivKey:  privKey,
+		KeyPass:  keyPass,
 	}, fp)
 	if err != nil {
 		return nil, h, friendlySSHError(err)

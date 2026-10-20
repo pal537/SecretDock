@@ -3529,11 +3529,33 @@ function sshModal(h) {
     <div class="frow"><label>主机</label><input id="sshHost" value="${esc(h?.host || '')}" placeholder="IP 或域名，IPv6 直接填"></div>
     <div class="frow"><label>端口</label><input id="sshPort" type="number" value="${h?.port || 22}"></div>
     <div class="frow"><label>用户名</label><input id="sshUser" value="${esc(h?.username || 'root')}"></div>
-    <div class="frow"><label>密码${isEdit ? '（留空不改）' : ''}</label><input id="sshPass" type="password" placeholder="${isEdit ? '留空不修改' : 'SSH 密码'}"></div>
+    <div class="frow"><label>密码${isEdit ? '（留空不改）' : ''}</label><input id="sshPass" type="password" placeholder="${isEdit ? '留空不修改' : 'SSH 密码（与私钥二选一，或都填）'}"></div>
+    <div class="frow"><label>私钥${isEdit && h.hasKey ? '（已保存，留空不改）' : ''}</label><textarea id="sshKey" rows="3" placeholder="粘贴私钥内容（-----BEGIN OPENSSH PRIVATE KEY----- 开头的那份），与密码二选一或都填"></textarea></div>
+    <div style="margin:-4px 0 12px;display:flex;align-items:center;gap:10px">
+      <button class="btn ghost sm" id="sshKeyFileBtn">从文件导入私钥</button>
+      <input type="file" id="sshKeyFile" style="display:none">
+      <small class="muted" id="sshKeyState">${isEdit && h.hasKey ? '当前已保存私钥' : ''}</small>
+    </div>
+    <div class="frow"><label>私钥口令</label><input id="sshKeyPass" type="password" placeholder="私钥没设口令就留空（口令随私钥一同保存）"></div>
+    ${isEdit && h.hasKey ? `<div style="margin-bottom:12px"><label style="font-size:13px;font-weight:400;color:var(--text)"><input type="checkbox" id="sshClearKey" style="width:auto;margin-right:6px">清除已保存的私钥</label></div>` : ''}
     <div class="frow"><label>国家</label><input id="sshCountry" value="${esc(h?.country || '')}" placeholder="如 中国 / 美国 / CN / US"></div>
     <div class="frow"><label>地区</label><input id="sshRegion" value="${esc(h?.region || '')}" placeholder="如 西雅图 / 圣何塞"></div>
     <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">保存</button></div>`);
   $('#mCancel').onclick = closeModal;
+  const keyFileBtn = $('#sshKeyFileBtn');
+  if (keyFileBtn) keyFileBtn.onclick = () => $('#sshKeyFile').click();
+  const keyFileInput = $('#sshKeyFile');
+  if (keyFileInput) keyFileInput.onchange = () => {
+    const f = keyFileInput.files && keyFileInput.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      $('#sshKey').value = String(rd.result || '');
+      const st = $('#sshKeyState');
+      if (st) st.textContent = '已导入 ' + f.name;
+    };
+    rd.readAsText(f);
+  };
   $('#mOk').onclick = async () => {
     const data = {
       categoryId: +$('#sshCat').value,
@@ -3542,11 +3564,14 @@ function sshModal(h) {
       port: +$('#sshPort').value || 22,
       username: $('#sshUser').value.trim() || 'root',
       password: $('#sshPass').value,
+      privKey: $('#sshKey').value.trim(),
+      keyPass: $('#sshKeyPass').value,
+      clearKey: !!($('#sshClearKey') && $('#sshClearKey').checked),
       country: $('#sshCountry').value.trim(),
       region: $('#sshRegion').value.trim(),
     };
     if (!data.host) return toast('请填写主机', 'err');
-    if (!isEdit && !data.password) return toast('请填写密码', 'err');
+    if (!isEdit && !data.password && !data.privKey) return toast('密码和私钥至少填一个', 'err');
     try {
       if (isEdit) await api('PUT', `/api/ssh-hosts/${h.id}`, data);
       else await api('POST', '/api/ssh-hosts', data);

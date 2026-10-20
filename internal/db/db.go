@@ -278,7 +278,7 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	// ssh_hosts 加 region/os_id/os_version 列
-	for _, col := range []string{"region", "os_id", "os_version"} {
+	for _, col := range []string{"region", "os_id", "os_version", "privkey_enc", "keypass_enc"} {
 		var n int
 		_ = sqldb.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('ssh_hosts') WHERE name = '`+col+`'`).Scan(&n)
 		if n == 0 {
@@ -2066,6 +2066,9 @@ type SSHHost struct {
 	Port        int    `json:"port"`
 	Username    string `json:"username"`
 	PasswordEnc string `json:"-"` // 不返回前端
+	PrivKeyEnc  string `json:"-"` // SSH 私钥（加密），不返回前端
+	KeyPassEnc  string `json:"-"` // 私钥口令（加密），不返回前端
+	HasKey      bool   `json:"hasKey"`
 	Country     string `json:"country"`
 	Region      string `json:"region"`
 	OsID        string `json:"osId"`
@@ -2149,9 +2152,9 @@ func (d *DB) DeleteSSHCategory(id int64) error {
 	return err
 }
 
-func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, passwordEnc, country, region string) (int64, error) {
-	r, err := d.Exec(`INSERT INTO ssh_hosts (category_id, name, host, port, username, password_enc, country, region, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, catID, name, host, port, username, passwordEnc, country, region, time.Now().Unix())
+func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region string) (int64, error) {
+	r, err := d.Exec(`INSERT INTO ssh_hosts (category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, catID, name, host, port, username, passwordEnc, privKeyEnc, keyPassEnc, country, region, time.Now().Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -2161,7 +2164,7 @@ func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, p
 func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 	var rows *sql.Rows
 	var err error
-	q := `SELECT id, category_id, name, host, port, username, password_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at FROM ssh_hosts`
+	q := `SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at FROM ssh_hosts`
 	if catID == 0 {
 		rows, err = d.Query(q + ` ORDER BY created_at DESC`)
 	} else {
@@ -2174,9 +2177,10 @@ func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 	out := []SSHHost{}
 	for rows.Next() {
 		var h SSHHost
-		if err := rows.Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt); err != nil {
 			return nil, err
 		}
+		h.HasKey = h.PrivKeyEnc != ""
 		out = append(out, h)
 	}
 	return out, nil
@@ -2184,20 +2188,29 @@ func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 
 func (d *DB) GetSSHHost(id int64) (SSHHost, error) {
 	var h SSHHost
-	err := d.QueryRow(`SELECT id, category_id, name, host, port, username, password_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at
-		FROM ssh_hosts WHERE id = ?`, id).Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt)
+	err := d.QueryRow(`SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at
+		FROM ssh_hosts WHERE id = ?`, id).Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt)
+	h.HasKey = h.PrivKeyEnc != ""
 	return h, err
 }
 
-func (d *DB) UpdateSSHHost(id, catID int64, name, host string, port int, username, passwordEnc, country, region string) error {
-	if passwordEnc == "" {
-		// 不改密码
-		_, err := d.Exec(`UPDATE ssh_hosts SET category_id=?, name=?, host=?, port=?, username=?, country=?, region=? WHERE id=?`,
-			catID, name, host, port, username, country, region, id)
-		return err
+// UpdateSSHHost 更新主机。passwordEnc/privKeyEnc 为空表示不改对应凭据；
+// privKeyEnc 非空时 keyPassEnc 随私钥一同保存（可为空）；clearKey 为 true 时清除已存私钥与口令。
+func (d *DB) UpdateSSHHost(id, catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region string, clearKey bool) error {
+	sets := "category_id=?, name=?, host=?, port=?, username=?, country=?, region=?"
+	args := []any{catID, name, host, port, username, country, region}
+	if passwordEnc != "" {
+		sets += ", password_enc=?"
+		args = append(args, passwordEnc)
 	}
-	_, err := d.Exec(`UPDATE ssh_hosts SET category_id=?, name=?, host=?, port=?, username=?, password_enc=?, country=?, region=? WHERE id=?`,
-		catID, name, host, port, username, passwordEnc, country, region, id)
+	if clearKey {
+		sets += ", privkey_enc='', keypass_enc=''"
+	} else if privKeyEnc != "" {
+		sets += ", privkey_enc=?, keypass_enc=?"
+		args = append(args, privKeyEnc, keyPassEnc)
+	}
+	args = append(args, id)
+	_, err := d.Exec(`UPDATE ssh_hosts SET `+sets+` WHERE id=?`, args...)
 	return err
 }
 

@@ -19,6 +19,8 @@ type HostInfo struct {
 	Port     int
 	Username string
 	Password string
+	PrivKey  string // 私钥 PEM（明文，仅内存）
+	KeyPass  string // 私钥口令（可空）
 }
 
 // Addr 返回 host:port，IPv6 自动加括号
@@ -55,11 +57,29 @@ func Dial(info HostInfo, knownFP string) (*ssh.Client, string, error) {
 			return nil
 		}
 	}
+	var auth []ssh.AuthMethod
+	if strings.TrimSpace(info.PrivKey) != "" {
+		var signer ssh.Signer
+		var err error
+		if info.KeyPass != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase([]byte(info.PrivKey), []byte(info.KeyPass))
+		} else {
+			signer, err = ssh.ParsePrivateKey([]byte(info.PrivKey))
+		}
+		if err != nil {
+			return nil, "", fmt.Errorf("私钥解析失败（格式不对或口令错误）")
+		}
+		auth = append(auth, ssh.PublicKeys(signer))
+	}
+	if info.Password != "" {
+		auth = append(auth, ssh.Password(info.Password))
+	}
+	if len(auth) == 0 {
+		return nil, "", fmt.Errorf("没有可用的登录凭据（密码和私钥都没有）")
+	}
 	cfg := &ssh.ClientConfig{
 		User: info.Username,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(info.Password),
-		},
+		Auth: auth,
 		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}

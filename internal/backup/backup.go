@@ -116,6 +116,8 @@ type SSHHostData struct {
 	Port      int    `json:"port"`
 	Username  string `json:"username"`
 	Password  string `json:"password"`
+	PrivKey   string `json:"privKey,omitempty"`
+	KeyPass   string `json:"keyPass,omitempty"`
 	Country   string `json:"country,omitempty"`
 	Region    string `json:"region,omitempty"`
 	OsID      string `json:"osId,omitempty"`
@@ -310,9 +312,24 @@ func Collect(database *db.DB, encKey []byte, opts BackupOptions) (*ExportFile, e
 				if err != nil {
 					return nil, err
 				}
+				var privKey, keyPass string
+				if h.PrivKeyEnc != "" {
+					k, err := dec(h.PrivKeyEnc, fmt.Sprintf("ssh host %d key", h.ID))
+					if err != nil {
+						return nil, err
+					}
+					privKey = k
+					if h.KeyPassEnc != "" {
+						kp, err := dec(h.KeyPassEnc, fmt.Sprintf("ssh host %d keypass", h.ID))
+						if err != nil {
+							return nil, err
+						}
+						keyPass = kp
+					}
+				}
 				ef.SSHHosts = append(ef.SSHHosts, SSHHostData{
 					Name: h.Name, Host: h.Host, Port: h.Port, Username: h.Username,
-					Password: pw, Country: h.Country, Region: h.Region,
+					Password: pw, PrivKey: privKey, KeyPass: keyPass, Country: h.Country, Region: h.Region,
 					OsID: h.OsID, OsVersion: h.OsVersion, Category: names[h.CategoryID],
 					CreatedAt: h.CreatedAt,
 				})
@@ -621,7 +638,22 @@ func applyImport(database *db.DB, encKey, payload []byte, opts BackupOptions) (i
 		if err != nil {
 			return count, err
 		}
-		id, err := database.CreateSSHHost(catID, hd.Name, hd.Host, hd.Port, hd.Username, enc, hd.Country, hd.Region)
+		keyEnc, keyPassEnc := "", ""
+		if hd.PrivKey != "" {
+			k, err := encOrDie(encKey, hd.PrivKey)
+			if err != nil {
+				return count, err
+			}
+			keyEnc = k
+			if hd.KeyPass != "" {
+				kp, err := encOrDie(encKey, hd.KeyPass)
+				if err != nil {
+					return count, err
+				}
+				keyPassEnc = kp
+			}
+		}
+		id, err := database.CreateSSHHost(catID, hd.Name, hd.Host, hd.Port, hd.Username, enc, keyEnc, keyPassEnc, hd.Country, hd.Region)
 		if err != nil {
 			return count, err
 		}

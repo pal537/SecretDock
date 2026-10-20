@@ -177,7 +177,7 @@ func TestExportImportV2Roundtrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	hcat, _ := d.FindOrCreateSSHCategory("服务器")
-	if _, err := d.CreateSSHHost(hcat, "srv", "1.2.3.4", 22, "root", enc("pw"), "美国", "西雅图"); err != nil {
+	if _, err := d.CreateSSHHost(hcat, "srv", "1.2.3.4", 22, "root", enc("pw"), "", "", "美国", "西雅图"); err != nil {
 		t.Fatal(err)
 	}
 	if err := d.SetSetting("tg_bot_token", "tok123"); err != nil {
