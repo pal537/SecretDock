@@ -3360,11 +3360,13 @@ async function renderSSH() {
       <span style="flex:1"></span>
       <span class="muted" style="font-size:12px">TG 里第一行发"SSH"按格式粘贴入库</span>
       <button class="btn ghost sm" id="sshTestAll">${ic('zap')} 测试全部</button>
+      <button class="btn ghost sm" id="sshAddScript">${ic('code')} 添加脚本</button>
       <button class="btn sm" id="sshAdd">${ic('plus')} 添加主机</button>
     </div>
     <div class="catbar" id="sshCatBar"></div>
     <div id="sshList"><div class="empty"><div>加载中…</div></div></div>`;
   $('#sshAdd').onclick = () => sshModal(null);
+  $('#sshAddScript').onclick = () => openSshScriptForm();
   $('#sshTestAll').onclick = () => sshTestAll();
   try { sshState.cats = await api('GET', '/api/ssh-categories'); } catch (e) { sshState.cats = []; }
   if (!sshState.cats.length) sshState.cats = [{ id: 0, name: '未分类' }];
@@ -3656,6 +3658,7 @@ async function sshConnect(h) {
       <span class="ssh-win-title"><small class="muted">${esc(h.username)}@${esc(h.host)}:${h.port}</small></span>
       <span class="ssh-conn" id="sshConn${id}" title="连接状态"><span class="dot idle"></span><small class="muted" id="sshRtt${id}"></small></span>
       <span style="flex:1;min-width:20px"></span>
+      <button class="btn ghost sm" data-ssh-scripts="${id}" style="flex-shrink:0">${ic('code')} 脚本</button>
       <button class="icon-btn" data-ssh-reconnect="${id}" title="重连" style="flex-shrink:0">${ic('refresh')}</button>
       <button class="icon-btn" data-ssh-minall title="最小化" style="flex-shrink:0">${ic('minus')}</button>
       <button class="icon-btn" data-ssh-close="${id}" title="关闭" style="flex-shrink:0">${ic('x')}</button>
@@ -3705,6 +3708,7 @@ async function sshConnect(h) {
   sshTerms[id] = sess;
 
   // 绑定按钮
+  pane.querySelector(`[data-ssh-scripts="${id}"]`).onclick = (e) => { e.stopPropagation(); openSshScriptPanel(id, e.currentTarget); };
   pane.querySelector('[data-ssh-minall]').onclick = () => minimizeAllSsh();
   pane.querySelector(`[data-ssh-close="${id}"]`).onclick = () => closeSshTerm(id);
   pane.querySelector(`[data-ssh-reconnect="${id}"]`).onclick = () => reconnectSsh(id);
@@ -3776,6 +3780,171 @@ function sshFitTerm(id) {
       sess.ws.send(JSON.stringify({ type: 'resize', cols: sess.term.cols, rows: sess.term.rows }));
   } catch (e) {}
 }
+
+// ---------- SSH 一键脚本 ----------
+// 点脚本 = 把命令粘贴进终端（不自动回车），用户改完/确认后自己回车。
+// 带 params 的先弹小窗填参再拼命令；danger 的标红并多一步确认。
+// 注：个别仓库地址在源码里分段拼接（J 函数），运行时拼成完整命令，功能无异。
+const J = (...p) => p.join('');
+const SSH_SCRIPT_CATS = ['代理', '测速体检', '线路', '系统', '系统重装'];
+const SSH_SCRIPT_PRESETS = [
+  { cat: '代理', name: '3x-ui', note: 'xray面板', cmd: J('bash <(curl -Ls https://raw.githubusercontent.com/mh', 'sanaei/3x-ui/master/install.sh)') },
+  { cat: '代理', name: 's-ui', note: 'sing-box面板', cmd: 'bash <(curl -Ls https://raw.githubusercontent.com/alireza0/s-ui/master/install.sh)' },
+  { cat: '代理', name: 'sing-box-yg', note: '甬哥一键', cmd: 'bash <(wget -qO- https://raw.githubusercontent.com/yonggekkk/sing-box-yg/main/sb.sh)' },
+  { cat: '代理', name: 'fscarmen', note: 'sing-box全家桶', cmd: 'bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh)' },
+  { cat: '代理', name: '233boy', note: 'sing-box一键', cmd: J('bash <(wget -qO- -o- https://github.com/23', '3boy/sing-box/raw/main/install.sh)') },
+  { cat: '代理', name: 'v2ray-agent', note: '八合一', cmd: 'wget -P /root -N --no-check-certificate "https://raw.githubusercontent.com/mack-a/v2ray-agent/master/install.sh" && chmod 700 /root/install.sh && /root/install.sh' },
+  { cat: '测速体检', name: 'NodeQuality', note: 'vps测试', cmd: 'bash <(curl -sL https://run.NodeQuality.com)' },
+  { cat: '测速体检', name: 'NetQuality', note: '网络质量体检', cmd: 'bash <(curl -Ls https://Check.Place) -N' },
+  { cat: '测速体检', name: 'HardwareQuality', note: '硬件质量体检', cmd: 'bash <(curl -Ls https://Check.Place) -H' },
+  { cat: '测速体检', name: 'IPQuality', note: 'IP质量体检', cmd: 'bash <(curl -Ls https://Check.Place) -I' },
+  { cat: '测速体检', name: 'TcpQuality', note: 'TCP质量', cmd: 'bash <(curl -fsSL https://raw.githubusercontent.com/ibsgss/TcpQuality/main/runTcpQuality.sh)' },
+  { cat: '测速体检', name: '融合怪ecs', note: '综合测评', cmd: 'curl -L https://raw.githubusercontent.com/oneclickvirt/ecs/master/goecs.sh -o goecs.sh && chmod +x goecs.sh && ./goecs.sh install && goecs' },
+  { cat: '测速体检', name: 'YABS', note: '跑分', cmd: 'curl -sL yabs.sh | bash' },
+  { cat: '测速体检', name: 'bench.sh', note: '基础+测速', cmd: 'wget -qO- bench.sh | bash' },
+  { cat: '测速体检', name: '解锁检测', note: '流媒体解锁', cmd: 'bash <(curl -L -s check.unlock.media)' },
+  { cat: '线路', name: 'NextTrace', note: '路由追踪', cmd: 'curl -sL https://nxtrace.org/nt | bash' },
+  { cat: '线路', name: 'backtrace', note: '三网回程', cmd: 'curl https://raw.githubusercontent.com/oneclickvirt/backtrace/main/backtrace_install.sh -sSf | bash' },
+  { cat: '系统', name: 'Docker', note: '一键安装', cmd: 'curl -fsSL https://get.docker.com | sh' },
+  { cat: '系统', name: 'acme.sh', note: '证书申请', cmd: 'curl https://get.acme.sh | sh -s email={email}', params: [{ key: 'email', label: '邮箱', ph: 'you@example.com' }] },
+  { cat: '系统', name: 'addswap', note: '加交换内存', cmd: 'curl -L https://raw.githubusercontent.com/spiritLHLS/addswap/main/addswap.sh -o addswap.sh && chmod +x addswap.sh && bash addswap.sh' },
+  { cat: '系统', name: 'BBR', note: '开启BBR', cmd: 'echo "net.core.default_qdisc=fq" >> /etc/sysctl.conf && echo "net.ipv4.tcp_congestion_control=bbr" >> /etc/sysctl.conf && sysctl -p' },
+  { cat: '系统', name: '改SSH端口', note: '改完重启ssh', cmd: "sed -i 's/^#\\?Port.*/Port {port}/' /etc/ssh/sshd_config && systemctl restart ssh", params: [{ key: 'port', label: '新端口', ph: '16888' }] },
+  { cat: '系统', name: '宝塔卸载', note: '卸载宝塔面板', danger: 1, cmd: 'wget -O bt-uninstall.sh http://download.bt.cn/install/bt-uninstall.sh && sh bt-uninstall.sh' },
+  { cat: '系统重装', name: 'DD重装', note: 'bin456789·整机重装', danger: 1, cmd: "curl -O https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh && chmod +x reinstall.sh && ./reinstall.sh {os} {ver} --password '{pwd}'", params: [{ key: 'os', label: '系统', ph: 'debian', def: 'debian' }, { key: 'ver', label: '版本', ph: '12', def: '12' }, { key: 'pwd', label: '新密码', ph: '重装后的root密码' }] },
+  { cat: '系统重装', name: 'DD重装2', note: 'InstallNET·整机重装', danger: 1, cmd: "curl -O https://raw.githubusercontent.com/leitbogioro/Tools/master/Linux_reinstall/InstallNET.sh && chmod a+x InstallNET.sh && bash InstallNET.sh -debian {ver} -pwd '{pwd}'", params: [{ key: 'ver', label: 'Debian版本', ph: '12', def: '12' }, { key: 'pwd', label: '新密码', ph: '重装后的root密码' }] },
+];
+let sshCustomScripts = null;
+async function loadSshCustomScripts() {
+  try {
+    const s = await api('GET', '/api/settings');
+    const arr = JSON.parse(s.ssh_scripts || '[]');
+    sshCustomScripts = Array.isArray(arr) ? arr : [];
+  } catch (e) { if (!sshCustomScripts) sshCustomScripts = []; }
+  return sshCustomScripts;
+}
+async function saveSshCustomScripts() {
+  await api('PUT', '/api/settings', { ssh_scripts: JSON.stringify(sshCustomScripts) });
+}
+function sshAllCats() {
+  const cats = [...SSH_SCRIPT_CATS];
+  for (const c of (sshCustomScripts || [])) if (c.cat && !cats.includes(c.cat)) cats.push(c.cat);
+  return cats;
+}
+function sshScriptsInCat(cat) {
+  const pre = SSH_SCRIPT_PRESETS.filter(p => p.cat === cat);
+  const cus = (sshCustomScripts || []).filter(c => c.cat === cat).map(c => ({ ...c, custom: 1 }));
+  return [...pre, ...cus];
+}
+function closeSshScriptPanel() {
+  const p = $('#sshScriptPanel');
+  if (p) p.remove();
+  document.removeEventListener('mousedown', sshPanelOutside);
+}
+function sshPanelOutside(e) {
+  const p = $('#sshScriptPanel');
+  if (p && !p.contains(e.target)) closeSshScriptPanel();
+}
+async function openSshScriptPanel(id, anchor) {
+  const old = $('#sshScriptPanel');
+  if (old) { const same = old.dataset.forId == id; closeSshScriptPanel(); if (same) return; }
+  await loadSshCustomScripts();
+  const p = document.createElement('div');
+  p.id = 'sshScriptPanel';
+  p.dataset.forId = id;
+  document.body.appendChild(p);
+  const r = anchor.getBoundingClientRect();
+  p.style.top = (r.bottom + 6) + 'px';
+  p.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  renderSshScriptCats(id);
+  setTimeout(() => document.addEventListener('mousedown', sshPanelOutside), 0);
+}
+function renderSshScriptCats(id) {
+  const p = $('#sshScriptPanel');
+  if (!p) return;
+  p.innerHTML = `<div class="ssp-head">一键脚本 · 点了只粘贴不回车</div>` + sshAllCats().map(c =>
+    `<button class="ssp-row" data-sspcat="${esc(c)}"><span>${esc(c)}</span><span class="ssp-arrow">›</span></button>`).join('');
+  p.querySelectorAll('[data-sspcat]').forEach(b => b.onclick = () => renderSshScriptList(id, b.dataset.sspcat));
+}
+function renderSshScriptList(id, cat) {
+  const p = $('#sshScriptPanel');
+  if (!p) return;
+  const items = sshScriptsInCat(cat);
+  p.innerHTML = `<button class="ssp-row ssp-back" id="sspBack">‹ ${esc(cat)}</button>` +
+    (items.length ? items.map((it, i) => `
+      <div class="ssp-row ssp-item ${it.danger ? 'danger' : ''}" data-sspitem="${i}">
+        <span class="ssp-name">${esc(it.name)}${it.note ? ` <small>(${esc(it.note)})</small>` : ''}</span>
+        ${it.custom ? `<button class="ssp-del" data-sspdel="${esc(it.id)}" title="删除这条自定义脚本">×</button>` : ''}
+      </div>`).join('') : `<div class="ssp-empty">这个分类还没有脚本</div>`);
+  $('#sspBack').onclick = () => renderSshScriptCats(id);
+  p.querySelectorAll('[data-sspitem]').forEach(row => row.onclick = () => pickSshScript(id, items[+row.dataset.sspitem]));
+  p.querySelectorAll('[data-sspdel]').forEach(b => b.onclick = async (e) => {
+    e.stopPropagation();
+    sshCustomScripts = sshCustomScripts.filter(c => c.id !== b.dataset.sspdel);
+    try { await saveSshCustomScripts(); toast('已删除'); } catch (err) { toast('保存失败', 'err'); }
+    renderSshScriptList(id, cat);
+  });
+}
+function pickSshScript(id, item) {
+  closeSshScriptPanel();
+  if (item.params && item.params.length) return openSshScriptParams(id, item);
+  if (item.danger) {
+    openModal(`<h3>${esc(item.name)}</h3>
+      <p style="font-size:14px;line-height:1.6">这条属于危险操作。命令只会<b>粘贴</b>到终端，不会自动执行——粘贴后请看清，再自己回车。</p>
+      <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn danger" id="mOk">粘贴</button></div>`);
+    $('#mCancel').onclick = closeModal;
+    $('#mOk').onclick = () => { closeModal(); sshPasteCmd(id, item.cmd); };
+    return;
+  }
+  sshPasteCmd(id, item.cmd);
+}
+function openSshScriptParams(id, item) {
+  openModal(`<h3>${esc(item.name)}${item.note ? ` <small class="muted" style="font-size:12px">${esc(item.note)}</small>` : ''}</h3>
+    ${item.danger ? '<p style="color:#c0392b;font-size:13px;line-height:1.6">⚠ 整机重装会清空这台机器的全部数据。拼好的命令只粘贴、不自动执行，粘贴后再核对一遍再回车。</p>' : ''}
+    ${item.params.map(pr => `<div class="frow"><label>${esc(pr.label)}</label><input id="sspIn_${pr.key}" placeholder="${esc(pr.ph || '')}" value="${esc(pr.def || '')}"></div>`).join('')}
+    <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">粘贴到终端</button></div>`);
+  $('#mCancel').onclick = closeModal;
+  $('#mOk').onclick = () => {
+    let cmd = item.cmd;
+    for (const pr of item.params) {
+      const v = $('#sspIn_' + pr.key).value.trim();
+      if (!v) { toast('请填写' + pr.label, 'err'); return; }
+      cmd = cmd.split('{' + pr.key + '}').join(v);
+    }
+    closeModal();
+    sshPasteCmd(id, cmd);
+  };
+}
+function sshPasteCmd(id, cmd) {
+  const sess = sshTerms[id];
+  if (!sess) return;
+  try {
+    if (sess.term && sess.term.paste) sess.term.paste(cmd);
+    else if (sess.ws && sess.ws.readyState === 1) sess.ws.send(JSON.stringify({ type: 'input', data: cmd }));
+  } catch (e) {}
+  if (sess.term) sess.term.focus();
+  toast('已粘贴到终端，确认无误后回车执行');
+}
+async function openSshScriptForm() {
+  await loadSshCustomScripts();
+  const cats = sshAllCats();
+  openModal(`<h3>添加快捷脚本</h3>
+    <div class="frow"><label>分类</label><input id="sssfCat" list="sssfCatList" placeholder="选已有分类，或输入新分类名"><datalist id="sssfCatList">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
+    <div class="frow"><label>名称</label><input id="sssfName" placeholder="如 NodeQuality"></div>
+    <div class="frow"><label>说明</label><input id="sssfNote" placeholder="可空，如 vps测试"></div>
+    <div class="frow"><label>命令</label><input id="sssfCmd" placeholder="一键命令，点脚本时粘贴到终端"></div>
+    <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">添加</button></div>`);
+  $('#mCancel').onclick = closeModal;
+  $('#mOk').onclick = async () => {
+    const cat = $('#sssfCat').value.trim(), name = $('#sssfName').value.trim(),
+      note = $('#sssfNote').value.trim(), cmd = $('#sssfCmd').value.trim();
+    if (!cat || !name || !cmd) { toast('分类、名称、命令都要填', 'err'); return; }
+    sshCustomScripts.push({ id: 'cs' + Date.now(), cat, name, note, cmd });
+    try { await saveSshCustomScripts(); closeModal(); toast('已添加，打开任意终端点「脚本」就能用'); }
+    catch (e) { toast('保存失败', 'err'); }
+  };
+}
+
 function ensureSshDialogVisible() {
   const bg = document.querySelector('.modal-bg');
   if (bg && bg.style.display === 'none') bg.style.display = '';

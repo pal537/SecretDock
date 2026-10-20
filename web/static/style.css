@@ -450,6 +450,18 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
   .modal.wide.ssh-modal { position: absolute; inset: 10px; max-width: none; max-height: none; }
   .modal.wide.ssh-modal .ssh-win { width: 100%; max-width: 100%; height: 100%; max-height: none; }
 }
+/* SSH 一键脚本面板 */
+#sshScriptPanel { position: fixed; z-index: 10001; width: 252px; max-height: 62vh; overflow-y: auto; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.22); padding: 6px; }
+.ssp-head { font-size: 12px; color: var(--muted); padding: 6px 10px 4px; }
+.ssp-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 10px; border: none; background: none; border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text); cursor: pointer; text-align: left; box-sizing: border-box; }
+.ssp-row:hover { background: rgba(127,127,127,.12); }
+.ssp-arrow { color: var(--muted); }
+.ssp-back { color: var(--muted); font-size: 13px; justify-content: flex-start; border-bottom: 1px solid var(--border); border-radius: 8px 8px 0 0; margin-bottom: 4px; }
+.ssp-item .ssp-name small { color: var(--muted); font-size: 12px; }
+.ssp-item.danger .ssp-name { color: #c0392b; }
+.ssp-del { border: none; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 5px; flex-shrink: 0; border-radius: 6px; }
+.ssp-del:hover { color: #c0392b; }
+.ssp-empty { padding: 12px 10px; color: var(--muted); font-size: 13px; }
 
 .md-preview h1,.md-preview h2,.md-preview h3 { margin: 12px 0 8px; }
 .md-preview p { margin: 8px 0; line-height: 1.6; }

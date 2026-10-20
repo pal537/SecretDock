@@ -345,7 +345,7 @@ var settingKeys = []string{
 	// remote browser (neko)
 	"browser_url", "browser_enabled", "browser_pwd_enc",
 	// sidebar menu (order & visibility)
-	"menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order",
+	"menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order", "ssh_scripts",
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +423,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				_ = s.DB.SetSetting("browser_pwd_enc", enc)
 			}
 		}
-		for _, k := range []string{"admin_chat_id", "auto_delete_minutes", "query_pwd_max_tries", "tg_idle_wipe_minutes", "reminder_default_times", "backup_enabled", "backup_time", "backup_keep", "backup_dir", "browser_url", "browser_enabled", "menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order"} {
+		for _, k := range []string{"admin_chat_id", "auto_delete_minutes", "query_pwd_max_tries", "tg_idle_wipe_minutes", "reminder_default_times", "backup_enabled", "backup_time", "backup_keep", "backup_dir", "browser_url", "browser_enabled", "menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order", "ssh_scripts"} {
 			if v, ok := req[k]; ok {
 				_ = s.DB.SetSetting(k, v)
 			}
