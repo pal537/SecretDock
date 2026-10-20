@@ -462,6 +462,14 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 .ssp-del { border: none; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 2px 5px; flex-shrink: 0; border-radius: 6px; }
 .ssp-del:hover { color: #c0392b; }
 .ssp-empty { padding: 12px 10px; color: var(--muted); font-size: 13px; }
+/* 脚本管理 */
+.ssm-list { max-height: 54vh; overflow-y: auto; }
+.ssm-cat { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--muted); margin: 14px 0 2px; }
+.ssm-cat:first-child { margin-top: 2px; }
+.ssm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--border); }
+.ssm-name { font-size: 14px; }
+.ssm-name small { color: var(--muted); font-size: 12px; }
+.ssm-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
 .md-preview h1,.md-preview h2,.md-preview h3 { margin: 12px 0 8px; }
 .md-preview p { margin: 8px 0; line-height: 1.6; }

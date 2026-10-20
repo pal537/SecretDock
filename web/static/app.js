@@ -3360,13 +3360,13 @@ async function renderSSH() {
       <span style="flex:1"></span>
       <span class="muted" style="font-size:12px">TG 里第一行发"SSH"按格式粘贴入库</span>
       <button class="btn ghost sm" id="sshTestAll">${ic('zap')} 测试全部</button>
-      <button class="btn ghost sm" id="sshAddScript">${ic('code')} 添加脚本</button>
+      <button class="btn ghost sm" id="sshAddScript">${ic('code')} 管理脚本</button>
       <button class="btn sm" id="sshAdd">${ic('plus')} 添加主机</button>
     </div>
     <div class="catbar" id="sshCatBar"></div>
     <div id="sshList"><div class="empty"><div>加载中…</div></div></div>`;
   $('#sshAdd').onclick = () => sshModal(null);
-  $('#sshAddScript').onclick = () => openSshScriptForm();
+  $('#sshAddScript').onclick = () => openSshScriptManager();
   $('#sshTestAll').onclick = () => sshTestAll();
   try { sshState.cats = await api('GET', '/api/ssh-categories'); } catch (e) { sshState.cats = []; }
   if (!sshState.cats.length) sshState.cats = [{ id: 0, name: '未分类' }];
@@ -3781,13 +3781,16 @@ function sshFitTerm(id) {
   } catch (e) {}
 }
 
+
 // ---------- SSH 一键脚本 ----------
 // 点脚本 = 把命令粘贴进终端（不自动回车），用户改完/确认后自己回车。
 // 带 params 的先弹小窗填参再拼命令；danger 的标红并多一步确认。
+// 脚本数据存 settings 的 ssh_scripts（{items:[...]}）：首次读取时把内置默认写入服务器，
+// 之后一律以服务器列表为准——预置与自定义同等对待，都可在「管理脚本」里增删改、改分类。
 // 注：个别仓库地址在源码里分段拼接（J 函数），运行时拼成完整命令，功能无异。
 const J = (...p) => p.join('');
 const SSH_SCRIPT_CATS = ['代理', '测速体检', '线路', '系统', '系统重装'];
-const SSH_SCRIPT_PRESETS = [
+const SSH_SCRIPT_DEFAULTS = [
   { cat: '代理', name: '3x-ui', note: 'xray面板', cmd: J('bash <(curl -Ls https://raw.githubusercontent.com/mh', 'sanaei/3x-ui/master/install.sh)') },
   { cat: '代理', name: 's-ui', note: 'sing-box面板', cmd: 'bash <(curl -Ls https://raw.githubusercontent.com/alireza0/s-ui/master/install.sh)' },
   { cat: '代理', name: 'sing-box-yg', note: '甬哥一键', cmd: 'bash <(wget -qO- https://raw.githubusercontent.com/yonggekkk/sing-box-yg/main/sb.sh)' },
@@ -3814,27 +3817,36 @@ const SSH_SCRIPT_PRESETS = [
   { cat: '系统重装', name: 'DD重装', note: 'bin456789·整机重装', danger: 1, cmd: "curl -O https://raw.githubusercontent.com/bin456789/reinstall/main/reinstall.sh && chmod +x reinstall.sh && ./reinstall.sh {os} {ver} --password '{pwd}'", params: [{ key: 'os', label: '系统', ph: 'debian', def: 'debian' }, { key: 'ver', label: '版本', ph: '12', def: '12' }, { key: 'pwd', label: '新密码', ph: '重装后的root密码' }] },
   { cat: '系统重装', name: 'DD重装2', note: 'InstallNET·整机重装', danger: 1, cmd: "curl -O https://raw.githubusercontent.com/leitbogioro/Tools/master/Linux_reinstall/InstallNET.sh && chmod a+x InstallNET.sh && bash InstallNET.sh -debian {ver} -pwd '{pwd}'", params: [{ key: 'ver', label: 'Debian版本', ph: '12', def: '12' }, { key: 'pwd', label: '新密码', ph: '重装后的root密码' }] },
 ];
-let sshCustomScripts = null;
-async function loadSshCustomScripts() {
-  try {
-    const s = await api('GET', '/api/settings');
-    const arr = JSON.parse(s.ssh_scripts || '[]');
-    sshCustomScripts = Array.isArray(arr) ? arr : [];
-  } catch (e) { if (!sshCustomScripts) sshCustomScripts = []; }
-  return sshCustomScripts;
+let sshScriptsAll = null;
+async function loadSshScripts() {
+  let raw = '';
+  try { const s = await api('GET', '/api/settings'); raw = s.ssh_scripts || ''; } catch (e) {}
+  let items = null, legacy = [];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.items)) items = parsed.items;
+      else if (Array.isArray(parsed)) legacy = parsed;
+    } catch (e) {}
+  }
+  if (!items) {
+    items = SSH_SCRIPT_DEFAULTS.map((d, i) => ({ id: 'd' + i, ...d }));
+    for (const c of legacy) if (c && c.cmd) items.push({ id: c.id || ('cs' + Date.now()), cat: c.cat || '自定义', name: c.name || '脚本', note: c.note || '', cmd: c.cmd });
+    sshScriptsAll = items;
+    try { await saveSshScripts(); } catch (e) {}
+  } else sshScriptsAll = items;
+  return sshScriptsAll;
 }
-async function saveSshCustomScripts() {
-  await api('PUT', '/api/settings', { ssh_scripts: JSON.stringify(sshCustomScripts) });
+async function saveSshScripts() {
+  await api('PUT', '/api/settings', { ssh_scripts: JSON.stringify({ items: sshScriptsAll || [] }) });
 }
 function sshAllCats() {
-  const cats = [...SSH_SCRIPT_CATS];
-  for (const c of (sshCustomScripts || [])) if (c.cat && !cats.includes(c.cat)) cats.push(c.cat);
+  const cats = [];
+  for (const it of (sshScriptsAll || [])) if (it.cat && !cats.includes(it.cat)) cats.push(it.cat);
   return cats;
 }
 function sshScriptsInCat(cat) {
-  const pre = SSH_SCRIPT_PRESETS.filter(p => p.cat === cat);
-  const cus = (sshCustomScripts || []).filter(c => c.cat === cat).map(c => ({ ...c, custom: 1 }));
-  return [...pre, ...cus];
+  return (sshScriptsAll || []).filter(c => c.cat === cat);
 }
 function closeSshScriptPanel() {
   const p = $('#sshScriptPanel');
@@ -3848,7 +3860,7 @@ function sshPanelOutside(e) {
 async function openSshScriptPanel(id, anchor) {
   const old = $('#sshScriptPanel');
   if (old) { const same = old.dataset.forId == id; closeSshScriptPanel(); if (same) return; }
-  await loadSshCustomScripts();
+  await loadSshScripts();
   const p = document.createElement('div');
   p.id = 'sshScriptPanel';
   p.dataset.forId = id;
@@ -3862,8 +3874,11 @@ async function openSshScriptPanel(id, anchor) {
 function renderSshScriptCats(id) {
   const p = $('#sshScriptPanel');
   if (!p) return;
-  p.innerHTML = `<div class="ssp-head">一键脚本 · 点了只粘贴不回车</div>` + sshAllCats().map(c =>
-    `<button class="ssp-row" data-sspcat="${esc(c)}"><span>${esc(c)}</span><span class="ssp-arrow">›</span></button>`).join('');
+  const cats = sshAllCats();
+  p.innerHTML = `<div class="ssp-head">一键脚本 · 点了只粘贴不回车</div>` +
+    (cats.length ? cats.map(c =>
+      `<button class="ssp-row" data-sspcat="${esc(c)}"><span>${esc(c)}</span><span class="ssp-arrow">›</span></button>`).join('')
+      : `<div class="ssp-empty">还没有脚本，去 SSH 页点「管理脚本」添加</div>`);
   p.querySelectorAll('[data-sspcat]').forEach(b => b.onclick = () => renderSshScriptList(id, b.dataset.sspcat));
 }
 function renderSshScriptList(id, cat) {
@@ -3874,16 +3889,9 @@ function renderSshScriptList(id, cat) {
     (items.length ? items.map((it, i) => `
       <div class="ssp-row ssp-item ${it.danger ? 'danger' : ''}" data-sspitem="${i}">
         <span class="ssp-name">${esc(it.name)}${it.note ? ` <small>(${esc(it.note)})</small>` : ''}</span>
-        ${it.custom ? `<button class="ssp-del" data-sspdel="${esc(it.id)}" title="删除这条自定义脚本">×</button>` : ''}
       </div>`).join('') : `<div class="ssp-empty">这个分类还没有脚本</div>`);
   $('#sspBack').onclick = () => renderSshScriptCats(id);
   p.querySelectorAll('[data-sspitem]').forEach(row => row.onclick = () => pickSshScript(id, items[+row.dataset.sspitem]));
-  p.querySelectorAll('[data-sspdel]').forEach(b => b.onclick = async (e) => {
-    e.stopPropagation();
-    sshCustomScripts = sshCustomScripts.filter(c => c.id !== b.dataset.sspdel);
-    try { await saveSshCustomScripts(); toast('已删除'); } catch (err) { toast('保存失败', 'err'); }
-    renderSshScriptList(id, cat);
-  });
 }
 function pickSshScript(id, item) {
   closeSshScriptPanel();
@@ -3925,23 +3933,64 @@ function sshPasteCmd(id, cmd) {
   if (sess.term) sess.term.focus();
   toast('已粘贴到终端，确认无误后回车执行');
 }
-async function openSshScriptForm() {
-  await loadSshCustomScripts();
+// ---------- 脚本管理（SSH 页「管理脚本」） ----------
+const ea = (s) => esc(s == null ? '' : String(s)).replace(/"/g, '&quot;');
+async function openSshScriptManager() {
+  await loadSshScripts();
   const cats = sshAllCats();
-  openModal(`<h3>添加快捷脚本</h3>
-    <div class="frow"><label>分类</label><input id="sssfCat" list="sssfCatList" placeholder="选已有分类，或输入新分类名"><datalist id="sssfCatList">${cats.map(c => `<option value="${esc(c)}">`).join('')}</datalist></div>
-    <div class="frow"><label>名称</label><input id="sssfName" placeholder="如 NodeQuality"></div>
-    <div class="frow"><label>说明</label><input id="sssfNote" placeholder="可空，如 vps测试"></div>
-    <div class="frow"><label>命令</label><input id="sssfCmd" placeholder="一键命令，点脚本时粘贴到终端"></div>
-    <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">添加</button></div>`);
-  $('#mCancel').onclick = closeModal;
+  const groups = cats.map(cat => `
+    <div class="ssm-cat"><span>${esc(cat)}</span><button class="btn ghost sm" data-ssmadd="${esc(cat)}">+ 添加</button></div>
+    ${sshScriptsInCat(cat).map(it => `
+      <div class="ssm-row">
+        <span class="ssm-name">${esc(it.name)}${it.note ? ` <small>(${esc(it.note)})</small>` : ''}</span>
+        <span class="ssm-actions">
+          <button class="btn ghost sm" data-ssmedit="${esc(it.id)}">编辑</button>
+          <button class="btn ghost sm" data-ssmdel="${esc(it.id)}">删除</button>
+        </span>
+      </div>`).join('')}`).join('');
+  openModal(`<h3>管理脚本</h3>
+    <div style="margin-bottom:6px"><button class="btn sm" id="ssmAddNew">+ 添加脚本</button>
+    <span class="muted" style="font-size:12px;margin-left:8px">编辑里改「分类」即可移动到别的分类</span></div>
+    <div class="ssm-list">${groups || '<div class="muted" style="padding:10px 2px">还没有脚本，点上面添加。</div>'}</div>
+    <div class="mfoot"><button class="btn" id="mClose">完成</button></div>`);
+  $('#mClose').onclick = closeModal;
+  $('#ssmAddNew').onclick = () => openSshScriptEdit(null, '');
+  document.querySelectorAll('[data-ssmadd]').forEach(b => b.onclick = () => openSshScriptEdit(null, b.dataset.ssmadd));
+  document.querySelectorAll('[data-ssmedit]').forEach(b => b.onclick = () => openSshScriptEdit(sshScriptsAll.find(x => x.id === b.dataset.ssmedit), null));
+  document.querySelectorAll('[data-ssmdel]').forEach(b => b.onclick = () => confirmDeleteSshScript(b.dataset.ssmdel));
+}
+function confirmDeleteSshScript(id) {
+  const it = (sshScriptsAll || []).find(x => x.id === id);
+  if (!it) return;
+  openModal(`<h3>删除脚本</h3>
+    <p style="font-size:14px;line-height:1.6">确定删除「${esc(it.name)}」？</p>
+    <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn danger" id="mOk">删除</button></div>`);
+  $('#mCancel').onclick = () => openSshScriptManager();
   $('#mOk').onclick = async () => {
-    const cat = $('#sssfCat').value.trim(), name = $('#sssfName').value.trim(),
-      note = $('#sssfNote').value.trim(), cmd = $('#sssfCmd').value.trim();
+    sshScriptsAll = sshScriptsAll.filter(x => x.id !== id);
+    try { await saveSshScripts(); toast('已删除'); } catch (e) { toast('保存失败', 'err'); }
+    openSshScriptManager();
+  };
+}
+function openSshScriptEdit(item, presetCat) {
+  const isNew = !item;
+  const it = item || { cat: presetCat || '', name: '', note: '', cmd: '' };
+  const cats = sshAllCats();
+  openModal(`<h3>${isNew ? '添加脚本' : '编辑脚本'}</h3>
+    <div class="frow"><label>分类</label><input id="ssseCat" list="ssseCatList" value="${ea(it.cat)}" placeholder="选已有分类，或输入新分类名"><datalist id="ssseCatList">${cats.map(c => `<option value="${ea(c)}">`).join('')}</datalist></div>
+    <div class="frow"><label>名称</label><input id="ssseName" value="${ea(it.name)}" placeholder="如 NodeQuality"></div>
+    <div class="frow"><label>说明</label><input id="ssseNote" value="${ea(it.note || '')}" placeholder="可空，如 vps测试"></div>
+    <div class="frow"><label>命令</label><input id="ssseCmd" value="${ea(it.cmd)}" placeholder="一键命令，点脚本时粘贴到终端"></div>
+    <div class="mfoot"><button class="btn ghost" id="mCancel">返回</button><button class="btn" id="mOk">${isNew ? '添加' : '保存'}</button></div>`);
+  $('#mCancel').onclick = () => openSshScriptManager();
+  $('#mOk').onclick = async () => {
+    const cat = $('#ssseCat').value.trim(), name = $('#ssseName').value.trim(),
+      note = $('#ssseNote').value.trim(), cmd = $('#ssseCmd').value.trim();
     if (!cat || !name || !cmd) { toast('分类、名称、命令都要填', 'err'); return; }
-    sshCustomScripts.push({ id: 'cs' + Date.now(), cat, name, note, cmd });
-    try { await saveSshCustomScripts(); closeModal(); toast('已添加，打开任意终端点「脚本」就能用'); }
-    catch (e) { toast('保存失败', 'err'); }
+    if (isNew) sshScriptsAll.push({ id: 'cs' + Date.now(), cat, name, note, cmd });
+    else Object.assign(it, { cat, name, note, cmd });
+    try { await saveSshScripts(); toast('已保存'); } catch (e) { toast('保存失败', 'err'); return; }
+    openSshScriptManager();
   };
 }
 
