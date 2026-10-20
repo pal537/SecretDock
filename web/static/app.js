@@ -3756,20 +3756,24 @@ async function sshConnect(h) {
   }, 3000);
 }
 
-// 适配终端尺寸：按容器实际宽度算，不撑出对话框
+// 适配终端尺寸：用 FitAddon 按真实字格量容器，画布与容器严丝合缝，
+// 不再手算列数（÷7.5 估宽偏小，画布必然比容器宽、右边被切）。
 function sshFitTerm(id) {
   const sess = sshTerms[id];
   if (!sess || !sess.term) return;
   const el = document.getElementById('sshTermEl' + id);
-  let cols = 80, rows = 24;
-  if (el && el.clientWidth > 100) {
-    cols = Math.max(70, Math.min(110, Math.floor(el.clientWidth / 7.5)));
-    rows = Math.max(20, Math.min(40, Math.floor(el.clientHeight / 17)));
-  }
+  if (!el || el.clientWidth < 50 || el.clientHeight < 50) return;
   try {
-    sess.term.resize(cols, rows);
+    if (sess.fit) {
+      sess.fit.fit();
+    } else {
+      const fs = (sess.term.options && sess.term.options.fontSize) || 14;
+      const cols = Math.max(20, Math.floor((el.clientWidth - 16) / (fs * 0.605)));
+      const rows = Math.max(8, Math.floor((el.clientHeight - 16) / (fs * 1.18)));
+      sess.term.resize(cols, rows);
+    }
     if (sess.ws && sess.ws.readyState === 1)
-      sess.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+      sess.ws.send(JSON.stringify({ type: 'resize', cols: sess.term.cols, rows: sess.term.rows }));
   } catch (e) {}
 }
 function ensureSshDialogVisible() {
@@ -3792,6 +3796,7 @@ function connectSshWs(id) {
 
   ws.onopen = () => {
     term.writeln('\x1b[32m连接成功。\x1b[0m');
+    sshFitTerm(id);
     setSshConn(id, 'ok', '');
     startSshHeartbeat(id);
     loadSSHStats(id);

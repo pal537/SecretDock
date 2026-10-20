@@ -383,7 +383,7 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 [id^="sshTermEl"] { flex: 1; width: 100%; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-height: 0; min-width: 0; }
 .ssh-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 [id^="sshTermEl"] .xterm { padding: 8px; height: 100%; }
-.ssh-cmdbar { display: flex; gap: 8px; margin-top: 10px; }
+.ssh-cmdbar { display: flex; gap: 8px; margin-top: 10px; flex-shrink: 0; }
 .ssh-cmdbar input { flex: 1; }
 /* 最小化悬浮条 */
 #sshMinBar { position: fixed; right: 20px; bottom: 20px; display: none; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 8px 16px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 9999; font-size: 14px; }
