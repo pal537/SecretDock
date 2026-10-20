@@ -13,7 +13,7 @@
   --ok: #2fa36b;
   --radius: 12px;
   --shadow: 0 2px 12px rgba(30, 45, 90, .07);
-  --sidebar-w: 232px;
+  --sidebar-w: 180px;
 }
 [data-theme="dark"] {
   --bg: #141a26;
@@ -59,7 +59,7 @@ input, select, textarea { font: inherit; color: var(--text); }
 .brand .logo svg { width: 20px; height: 20px; }
 .brand b { font-size: 16px; display: block; line-height: 1.2; }
 .brand small { color: var(--muted); font-size: 11px; }
-.nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; }
+.nav { padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; flex: 1; overflow-y: auto; scrollbar-width: thin; }
 .nav-item {
   display: flex; align-items: center; gap: 10px; padding: 9px 12px;
   border-radius: 9px; border: 0; background: none; color: var(--text);
@@ -105,6 +105,7 @@ input, select, textarea { font: inherit; color: var(--text); }
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 16px; box-shadow: var(--shadow); cursor: pointer; text-align: left; width: 100%;
   display: flex; gap: 12px; align-items: center; transition: transform .12s, box-shadow .12s;
+  color: var(--text);
 }
 .mcard:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(30, 45, 90, .12); }
 .mlogo {
@@ -465,3 +466,41 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 .tlist { display: flex; flex-direction: column; gap: 6px; }
 .trow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; flex-wrap: wrap; }
 .trow code { font-family: monospace; }
+
+/* ---------- sidebar collapse ---------- */
+.sidebar { transition: width .18s ease, flex-basis .18s ease; }
+.sb-toggle { width: 28px; height: 28px; flex: 0 0 28px; margin-left: auto; }
+.sb-toggle svg { width: 15px; height: 15px; }
+.sidebar.collapsed { width: 60px; flex: 0 0 60px; }
+.sidebar.editing { width: 300px; flex: 0 0 300px; }
+.sidebar.collapsed .brand { flex-direction: column; justify-content: center; gap: 8px; padding: 16px 8px 12px; }
+.sidebar.collapsed .brand-text, .sidebar.collapsed .nav-label { display: none; }
+.sidebar.collapsed .nav { padding: 6px 8px; }
+.sidebar.collapsed .nav-item { justify-content: center; padding: 9px 0; }
+.sidebar.collapsed .side-foot { padding: 12px 8px; }
+.sidebar.collapsed .foot-row { flex-direction: column; align-items: center; }
+.sidebar.collapsed .sb-toggle { margin-left: 0; }
+
+.nav { overflow-y: auto; min-height: 0; }
+
+/* ---------- sidebar inline edit mode ---------- */
+.nav-item.editing { cursor: default; }
+.nav-item.editing:hover { background: none; }
+.nav-item.editing .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item.is-hidden { opacity: .45; }
+.edit-btns { margin-left: auto; display: flex; gap: 4px; }
+.icon-btn.mini { width: 26px; height: 26px; flex: 0 0 26px; }
+.icon-btn.mini svg { width: 14px; height: 14px; flex: 0 0 14px; }
+
+/* ---------- custom links section: divider + folders ---------- */
+.nav-divider { border-top: 1px solid var(--border); margin: 8px 2px; }
+.nav-item.kid { padding-left: 24px; }
+.nav-item.folder { cursor: pointer; }
+.nav-item.folder .chev { margin-left: auto; display: flex; transition: transform .15s; }
+.nav-item.folder.open .chev { transform: rotate(180deg); }
+.folder-kids { display: flex; flex-direction: column; gap: 2px; }
+.sidebar.collapsed .nav-item.folder .chev { display: none; }
+
+/* ---------- menu link favicons ---------- */
+.nav-icowrap { position: relative; width: 18px; height: 18px; flex: 0 0 18px; display: inline-flex; align-items: center; justify-content: center; }
+.nav-ico { position: absolute; inset: 0; width: 18px; height: 18px; border-radius: 4px; object-fit: contain; background: #fff; }

@@ -726,9 +726,15 @@ func (s *Service) handlePhoto(client *Client, chatID int64, m *Message) {
 	}
 	_ = small
 	caption := strings.TrimSpace(m.Caption)
+	origName := caption
+	if origName == "" {
+		// 无中文：日期+随机4位+后缀
+		randStr := fmt.Sprintf("%04x", time.Now().UnixNano()%65536)
+		origName = time.Now().Format("20060102") + "_" + randStr + ext
+	}
 	if forceCatID != 0 {
 		// 手动添加：已选定分类，直接存
-		if _, err := s.db.CreateImage(forceCatID, caption, "", fullName, thumbS, thumbM, thumbL, large.FileSize); err != nil {
+		if _, err := s.db.CreateImage(forceCatID, caption, origName, fullName, thumbS, thumbM, thumbL, large.FileSize); err != nil {
 			id, _ := client.SendMessage(chatID, "保存图片失败："+err.Error(), "", nil)
 			s.trackBot(chatID, id)
 			return
@@ -741,7 +747,7 @@ func (s *Service) handlePhoto(client *Client, chatID int64, m *Message) {
 	}
 	// 普通流程：先存未分类，再选分类
 	uncatID, _ := s.db.FindOrCreateImageCategory("")
-	imgID, err := s.db.CreateImage(uncatID, caption, "", fullName, thumbS, thumbM, thumbL, large.FileSize)
+	imgID, err := s.db.CreateImage(uncatID, caption, origName, fullName, thumbS, thumbM, thumbL, large.FileSize)
 	if err != nil {
 		id, _ := client.SendMessage(chatID, "保存图片失败："+err.Error(), "", nil)
 		s.trackBot(chatID, id)
@@ -913,6 +919,11 @@ func (s *Service) startAdd(client *Client, chatID int64, text string) {
 	// bare userscript paste (no marker): still auto-detected
 	if meta, ok := ParseUserScript(text); ok {
 		s.saveScriptToUncat(client, chatID, meta.Name, meta.Version, meta.Description, meta.Author, text)
+		return
+	}
+	// 多行“名字 网址”自动识别为网址（不用必须带“网址”前缀，也不用必须带 http）
+	if s.looksLikeLinks(text) {
+		s.startLinks(client, chatID, "网址\n"+text)
 		return
 	}
 	// 任何一行是节点链接（非 http）：弹出选择（订阅节点/机密库）
@@ -1195,6 +1206,28 @@ func splitBareDomain(line string) (name, url string, ok bool) {
 // startLinks handles the "网址" protocol:
 // lines without a URL switch the target category (auto-created),
 // lines with a URL are stored under the current category (default 未分类).
+// looksLikeLinks checks if text looks like multiple "name URL" lines.
+func (s *Service) looksLikeLinks(text string) bool {
+	lines := strings.Split(text, "\n")
+	count := 0
+	for _, ln := range lines {
+		ln = strings.TrimSpace(ln)
+		if ln == "" {
+			continue
+		}
+		if _, _, ok := splitLinkLine(ln); ok {
+			count++
+			continue
+		}
+		if _, _, ok := splitBareDomain(ln); ok {
+			count++
+			continue
+		}
+		return false
+	}
+	return count >= 2
+}
+
 func (s *Service) startLinks(client *Client, chatID int64, text string) {
 	lines := strings.Split(text, "\n")
 	type entry struct{ name, url string }
@@ -2205,6 +2238,26 @@ func (s *Service) doSearch(client *Client, chatID int64, p *pending, keyword str
 				continue
 			}
 			lines = append(lines, "📄 "+escapeHTML(f.OrigName))
+			if len(lines) >= 20 {
+				break
+			}
+		}
+	case "node":
+		var allNodes []db.Node
+		if targetID == 0 {
+			cats, _ := s.db.ListNodeCategories()
+			for _, c := range cats {
+				ns, _ := s.db.ListNodes(c.ID)
+				allNodes = append(allNodes, ns...)
+			}
+		} else {
+			allNodes, _ = s.db.ListNodes(targetID)
+		}
+		for _, n := range allNodes {
+			if !match(n.Name) {
+				continue
+			}
+			lines = append(lines, "🌐 "+escapeHTML(n.Name))
 			if len(lines) >= 20 {
 				break
 			}

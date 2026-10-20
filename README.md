@@ -48,6 +48,18 @@ SecretDock is a self-hosted secret manager for developers and power users. The f
 
 ### 🚀 Quick Start (Docker)
 
+**Option A: Prebuilt image (fastest)**
+
+```bash
+docker run -d --name secretdock \
+  -p 127.0.0.1:8080:8080 \
+  -v ./data:/data \
+  --restart unless-stopped \
+  pal537/secretdock:latest
+```
+
+**Option B: Build from source**
+
 ```bash
 git clone https://github.com/pal537/SecretDock.git
 cd SecretDock

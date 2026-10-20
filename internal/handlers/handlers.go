@@ -173,6 +173,8 @@ func (s *Server) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/backup/export", s.requireAuth(s.handleBackupExport))
 	mux.HandleFunc("/api/backup/import", s.requireAuth(s.handleBackupImport))
 
+	mux.HandleFunc("/api/menu-icon", s.requireAuth(s.handleMenuIconFetch))
+	mux.HandleFunc("/menu-icons/", s.requireAuth(s.handleMenuIconFile))
 	mux.HandleFunc("/logos/", s.requireAuth(s.handleLogoFile))
 	mux.HandleFunc("/static/", s.checkIPPolicyMiddleware(s.handleStatic()))
 	mux.HandleFunc("/", s.checkIPPolicyMiddleware(s.handleIndex()))

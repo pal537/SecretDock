@@ -39,6 +39,12 @@ const ICONS = {
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>',
+  monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  chevL: '<path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>',
+  chevD: '<path d="M6 9l6 6 6-6"/>',
+  chevR: '<path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>',
+  arrowUp: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  arrowDown: '<path d="M12 5v14M19 12l-7 7-7-7"/>',
   zap: '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>',
   archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
   pdf: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6"/>',
@@ -122,6 +128,145 @@ function logoHTML(m, size) {
 
 /* ---------- state ---------- */
 const state = { view: 'merchants', merchants: [], cur: null, secrets: [], q: '', labels: [], authed: false };
+const browserCfg = { enabled: false, url: '', pwd: '' };
+/* ---------- sidebar menu: order / visibility / custom links ---------- */
+const MENU_ITEMS = [
+  { id: 'browser', label: '远程浏览器', icon: 'monitor' },
+  { id: 'merchants', label: '机密库', icon: 'vault' },
+  { id: 'scripts', label: '脚本', icon: 'code' },
+  { id: 'links', label: '网址', icon: 'link' },
+  { id: 'notes', label: '笔记', icon: 'note' },
+  { id: 'images', label: '图片', icon: 'image' },
+  { id: 'files', label: '文件', icon: 'file' },
+  { id: 'nodes', label: '订阅节点', icon: 'globe' },
+  { id: 'reminders', label: '提醒', icon: 'bell' },
+  { id: 'ssh', label: 'SSH', icon: 'terminal' },
+  { id: 'tghelp', label: 'TG操作说明', icon: 'help', foot: true },
+  { id: 'settings', label: '设置', icon: 'gear', foot: true },
+];
+const MENU_BUILTIN_IDS = MENU_ITEMS.map(m => m.id);
+const MENU_FOOT_IDS = MENU_ITEMS.filter(m => m.foot).map(m => m.id);
+const MENU_DEFAULT_ORDER = MENU_BUILTIN_IDS.filter(id => !MENU_FOOT_IDS.includes(id));
+const menuCfg = { order: [...MENU_DEFAULT_ORDER], hidden: [], links: [], folders: [], customOrder: [] };
+let openFolders = new Set();
+try { openFolders = new Set(JSON.parse(localStorage.getItem('sd-open-folders') || '[]')); } catch (e) {}
+function sanitizeLinks(rawLinks) {
+  let arr = [];
+  try { arr = JSON.parse(rawLinks || '[]'); } catch (e) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  return arr.filter(l => l && typeof l === 'object')
+    .filter(l => typeof l.id === 'string' && l.id.startsWith('lnk-'))
+    .map(l => ({
+      id: l.id,
+      label: String(l.label || '').trim().slice(0, 40),
+      url: String(l.url || '').trim().slice(0, 500),
+      mode: l.mode === 'embed' ? 'embed' : 'new',
+      folder: typeof l.folder === 'string' ? l.folder : '',
+      icon: typeof l.icon === 'number' && l.icon > 0 ? Math.floor(l.icon) : 0,
+    }))
+    .filter(l => l.label && /^https?:\/\//i.test(l.url));
+}
+function sanitizeFolders(rawFolders) {
+  let arr = [];
+  try { arr = JSON.parse(rawFolders || '[]'); } catch (e) { arr = []; }
+  if (!Array.isArray(arr)) arr = [];
+  return arr.filter(f => f && typeof f === 'object')
+    .filter(f => typeof f.id === 'string' && f.id.startsWith('fld-') && typeof f.name === 'string')
+    .slice(0, 30)
+    .map(f => ({ id: f.id.slice(0, 40), name: f.name.trim().slice(0, 40) }))
+    .filter(f => f.name);
+}
+function linkItem(l) {
+  return { id: l.id, label: l.label, icon: 'link', custom: true, url: l.url, mode: l.mode, folder: l.folder || '', iconTs: l.icon || 0 };
+}
+function folderItem(f) {
+  return { id: f.id, label: f.name, icon: 'folder', folderObj: true, kids: [] };
+}
+function sanitizeMenuCfg(rawOrder, rawHidden, rawLinks, rawFolders, rawCustomOrder) {
+  const folders = sanitizeFolders(rawFolders);
+  const folderIds = new Set(folders.map(f => f.id));
+  const links = sanitizeLinks(rawLinks).map(l => ({ ...l, folder: folderIds.has(l.folder) ? l.folder : '' }));
+  let ord = [];
+  try { ord = JSON.parse(rawOrder || '[]'); } catch (e) { ord = []; }
+  if (!Array.isArray(ord)) ord = [];
+  ord = ord.filter(id => MENU_BUILTIN_IDS.includes(id) && !MENU_FOOT_IDS.includes(id));
+  for (const id of MENU_DEFAULT_ORDER) if (!ord.includes(id)) ord.push(id);
+  // custom section order: folders + root-level links; migrate ids out of the old mixed menu_order
+  let cord = [];
+  try { cord = JSON.parse(rawCustomOrder || '[]'); } catch (e) { cord = []; }
+  if (!Array.isArray(cord)) cord = [];
+  const inCustom = id => folders.some(f => f.id === id) || links.some(l => l.id === id && !l.folder);
+  cord = cord.filter(inCustom);
+  let oldOrd = [];
+  try { oldOrd = JSON.parse(rawOrder || '[]'); } catch (e) { oldOrd = []; }
+  for (const id of oldOrd) if (inCustom(id) && !cord.includes(id)) cord.push(id);
+  for (const f of folders) if (!cord.includes(f.id)) cord.push(f.id);
+  for (const l of links) if (!l.folder && !cord.includes(l.id)) cord.push(l.id);
+  let hid = [];
+  try { hid = JSON.parse(rawHidden || '[]'); } catch (e) { hid = []; }
+  if (!Array.isArray(hid)) hid = [];
+  const validIds = new Set([...MENU_BUILTIN_IDS, ...folders.map(f => f.id), ...links.map(l => l.id)]);
+  // settings must stay visible so the menu config is always reachable
+  hid = hid.filter(id => id !== 'settings' && validIds.has(id));
+  return { order: ord, hidden: hid, links, folders, customOrder: cord };
+}
+function visibleNavItems() {
+  return MENU_ITEMS
+    .filter(m => !m.foot)
+    .filter(m => menuCfg.order.includes(m.id))
+    .sort((a, b) => menuCfg.order.indexOf(a.id) - menuCfg.order.indexOf(b.id))
+    .filter(m => !menuCfg.hidden.includes(m.id))
+    .filter(m => m.id !== 'browser' || browserCfg.enabled);
+}
+function customSectionItems(editing) {
+  // top-level custom entries in customOrder; folders carry their (visible) child links
+  const out = [];
+  const folderById = {};
+  for (const f of menuCfg.folders) folderById[f.id] = f;
+  const linkById = {};
+  for (const l of menuCfg.links) linkById[l.id] = l;
+  for (const id of menuCfg.customOrder) {
+    const f = folderById[id];
+    if (f) {
+      const item = folderItem(f);
+      item.kids = menuCfg.links.filter(l => l.folder === id)
+        .filter(l => editing || !menuCfg.hidden.includes(l.id))
+        .map(linkItem);
+      if (editing || !menuCfg.hidden.includes(id)) out.push(item);
+      continue;
+    }
+    const l = linkById[id];
+    if (l && !l.folder && (editing || !menuCfg.hidden.includes(id))) out.push(linkItem(l));
+  }
+  return out;
+}
+function visibleCustomItems() { return customSectionItems(false); }
+function visibleFootItems() {
+  const out = [];
+  const tg = MENU_ITEMS.find(m => m.id === 'tghelp');
+  if (tg && !menuCfg.hidden.includes('tghelp')) out.push(tg);
+  out.push(MENU_ITEMS.find(m => m.id === 'settings'));
+  return out.filter(Boolean);
+}
+function findLinkItem(id) {
+  const l = menuCfg.links.find(x => x.id === id);
+  return l ? linkItem(l) : null;
+}
+async function loadBrowserCfg() {
+  try {
+    const s = await api('GET', '/api/settings');
+    browserCfg.enabled = s.browser_enabled === '1' && !!s.browser_url;
+    browserCfg.url = s.browser_url || '';
+    browserCfg.pwd = s.browserPwd || '';
+    const m = sanitizeMenuCfg(s.menu_order, s.menu_hidden, s.menu_links, s.menu_folders, s.menu_custom_order);
+    menuCfg.order = m.order; menuCfg.hidden = m.hidden; menuCfg.links = m.links;
+    menuCfg.folders = m.folders; menuCfg.customOrder = m.customOrder;
+  } catch (e) {
+    browserCfg.enabled = false; browserCfg.url = ''; browserCfg.pwd = '';
+    menuCfg.order = [...MENU_DEFAULT_ORDER]; menuCfg.hidden = []; menuCfg.links = [];
+    menuCfg.folders = []; menuCfg.customOrder = [];
+  }
+}
 
 /* ---------- login ---------- */
 function renderSetup() {
@@ -262,24 +407,72 @@ function render2FAStep(tmp) {
 /* ---------- shell ---------- */
 function shell(content) {
   const insecure = location.protocol === 'http:' && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+  const collapsed = state.sbCollapsed === true;
+  function menuIcon(m) {
+    if (!(m.custom && m.iconTs)) return ic(m.icon);
+    return `<span class="nav-icowrap">${ic('link')}<img class="nav-ico" src="/menu-icons/${m.id}?v=${m.iconTs}" alt="" loading="lazy" onerror="this.remove()"></span>`;
+  }
+  function navBtn(m, kid) {
+    const lbl = `<span class="nav-label">${esc(m.label)}</span>`;
+    const kidCls = kid ? ' kid' : '';
+    const lead = menuIcon(m);
+    if (state.editMode && m.id !== 'settings') {
+      const hid = menuCfg.hidden.includes(m.id);
+      const eye = `<button class="icon-btn mini" data-act="eye" data-id="${m.id}" title="${hid ? '显示' : '隐藏'}">${ic(hid ? 'eyeOff' : 'eye')}</button>`;
+      const btns = m.id === 'tghelp' ? eye
+        : `<button class="icon-btn mini" data-act="up" data-id="${m.id}" title="上移">${ic('arrowUp')}</button>`
+        + `<button class="icon-btn mini" data-act="down" data-id="${m.id}" title="下移">${ic('arrowDown')}</button>`
+        + eye
+        + (m.custom ? `<button class="icon-btn mini" data-act="edit" data-id="${m.id}" title="编辑链接">${ic('edit')}</button>` : '');
+      return `<div class="nav-item editing${kidCls}${hid ? ' is-hidden' : ''}" title="${esc(m.label)}">${lead}${lbl}<span class="edit-btns">${btns}</span></div>`;
+    }
+    const act = state.view === m.id ? ' active' : '';
+    if (m.custom && m.mode === 'new')
+      return `<button class="nav-item${kidCls}${act}" data-ext="new" data-url="${esc(m.url)}" title="${esc(m.label)}">${lead}${lbl}</button>`;
+    return `<button class="nav-item${kidCls}${act}" data-nav="${m.id}" title="${esc(m.label)}">${lead}${lbl}</button>`;
+  }
+  function folderBtn(f) {
+    const lbl = `<span class="nav-label">${esc(f.label)}</span>`;
+    if (state.editMode) {
+      const hid = menuCfg.hidden.includes(f.id);
+      return `<div class="nav-item editing${hid ? ' is-hidden' : ''}" title="${esc(f.label)}">${ic(f.icon)}${lbl}<span class="edit-btns">`
+        + `<button class="icon-btn mini" data-act="up" data-id="${f.id}" title="上移">${ic('arrowUp')}</button>`
+        + `<button class="icon-btn mini" data-act="down" data-id="${f.id}" title="下移">${ic('arrowDown')}</button>`
+        + `<button class="icon-btn mini" data-act="eye" data-id="${f.id}" title="${hid ? '显示' : '隐藏'}">${ic(hid ? 'eyeOff' : 'eye')}</button>`
+        + `<button class="icon-btn mini" data-act="rename" data-id="${f.id}" title="重命名">${ic('edit')}</button>`
+        + `<button class="icon-btn mini" data-act="delfolder" data-id="${f.id}" title="删除文件夹">${ic('trash')}</button>`
+        + `</span></div>`
+        + f.kids.map(k => navBtn(k, true)).join('');
+    }
+    const open = openFolders.has(f.id);
+    return `<div class="nav-item folder${open ? ' open' : ''}" data-folder="${f.id}" title="${esc(f.label)}">${ic(f.icon)}${lbl}<span class="chev">${ic('chevD')}</span></div>`
+      + (open ? `<div class="folder-kids">` + f.kids.map(k => navBtn(k, true)).join('') + `</div>` : '');
+  }
+  function customBtn(item) {
+    if (item.folderObj) return folderBtn(item);
+    return navBtn(item);
+  }
+  const navHtml = (state.editMode ? editModeItems() : visibleNavItems()).map(m => navBtn(m)).join('');
+  const customItems = customSectionItems(state.editMode);
+  const customHtml = (customItems.length || state.editMode)
+    ? `<div class="nav-divider"></div>` + customItems.map(customBtn).join('') : '';
+  const addRows = state.editMode
+    ? `<button class="nav-item" id="menuAddLink">${ic('plus')}<span class="nav-label">添加链接</span></button>`
+    + `<button class="nav-item" id="menuAddFolder">${ic('folder')}<span class="nav-label">新建文件夹</span></button>`
+    : '';
+  const footHtml = (state.editMode
+    ? ['tghelp', 'settings'].map(id => MENU_ITEMS.find(m => m.id === id))
+    : visibleFootItems()).filter(Boolean).map(m => navBtn(m)).join('');
   return `
-  <div class="sidebar">
-    <div class="brand"><span class="logo"><img src="/static/logo.svg?v=__APPV__" alt="SecretDock"></span><span><b>SecretDock</b><small>机密库</small></span></div>
+  <div class="sidebar ${collapsed ? 'collapsed' : ''}${state.editMode ? ' editing' : ''}">
+    <div class="brand"><span class="logo"><img src="/static/logo.svg?v=__APPV__" alt="SecretDock"></span><span class="brand-text"><b>SecretDock</b><small>机密库</small></span><button class="icon-btn sb-toggle" id="sbToggle" title="${collapsed ? '展开菜单' : '折叠菜单'}">${ic(collapsed ? 'chevR' : 'chevL')}</button></div>
     <nav class="nav">
-      <button class="nav-item ${state.view === 'merchants' ? 'active' : ''}" data-nav="merchants">${ic('vault')}机密库</button>
-      <button class="nav-item ${state.view === 'scripts' ? 'active' : ''}" data-nav="scripts">${ic('code')}脚本</button>
-      <button class="nav-item ${state.view === 'links' ? 'active' : ''}" data-nav="links">${ic('link')}网址</button>
-      <button class="nav-item ${state.view === 'notes' ? 'active' : ''}" data-nav="notes">${ic('note')}笔记</button>
-      <button class="nav-item ${state.view === 'images' ? 'active' : ''}" data-nav="images">${ic('image')}图片</button>
-      <button class="nav-item ${state.view === 'files' ? 'active' : ''}" data-nav="files">${ic('file')}文件</button>
-      <button class="nav-item ${state.view === 'nodes' ? 'active' : ''}" data-nav="nodes">${ic('globe')}订阅节点</button>
-      <button class="nav-item ${state.view === 'reminders' ? 'active' : ''}" data-nav="reminders">${ic('bell')}提醒</button>
-      <button class="nav-item ${state.view === 'ssh' ? 'active' : ''}" data-nav="ssh">${ic('terminal')}SSH</button>
+      ${navHtml}${customHtml}${addRows}
     </nav>
     <div class="side-foot">
-      <button class="nav-item ${state.view === 'tghelp' ? 'active' : ''}" data-nav="tghelp">${ic('help')}TG操作说明</button>
-      <button class="nav-item ${state.view === 'settings' ? 'active' : ''}" data-nav="settings">${ic('gear')}设置</button>
+      ${footHtml}
       <div class="foot-row">
+        <button class="icon-btn" id="menuEditBtn" title="${state.editMode ? '编辑完成' : '编辑菜单'}">${ic(state.editMode ? 'check' : 'edit')}</button>
         <button class="icon-btn" id="themeBtn" title="深色/浅色">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button>
         <button class="icon-btn" id="logoutBtn" title="退出登录">${ic('logout')}</button>
       </div>
@@ -291,7 +484,28 @@ function shell(content) {
   </div>`;
 }
 function bindShell() {
-  $$('.nav-item').forEach(b => b.onclick = () => nav(b.dataset.nav));
+  if (state.editMode) {
+    $$('.nav-item.editing [data-act]').forEach(b => b.onclick = e => { e.stopPropagation(); menuEditAct(b.dataset.act, b.dataset.id); });
+    const add = $('#menuAddLink');
+    if (add) add.onclick = () => openLinkDialog(null);
+    const addF = $('#menuAddFolder');
+    if (addF) addF.onclick = () => openFolderDialog(null);
+  } else {
+    $$('.nav-item').forEach(b => b.onclick = () => {
+      if (b.dataset.folder) { toggleFolder(b.dataset.folder); return; }
+      if (b.dataset.ext === 'new') { window.open(b.dataset.url, '_blank', 'noopener'); return; }
+      nav(b.dataset.nav);
+    });
+  }
+  $('#sbToggle').onclick = () => {
+    state.sbCollapsed = !state.sbCollapsed;
+    try { localStorage.setItem('sd-sb-collapsed', state.sbCollapsed ? '1' : '0'); } catch (e) {}
+    const sb = $('.sidebar');
+    sb.classList.toggle('collapsed', state.sbCollapsed);
+    $('#sbToggle').innerHTML = ic(state.sbCollapsed ? 'chevR' : 'chevL');
+    $('#sbToggle').title = state.sbCollapsed ? '展开菜单' : '折叠菜单';
+  };
+  $('#menuEditBtn').onclick = toggleEditMode;
   $('#themeBtn').onclick = () => {
     const cur = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = cur;
@@ -301,6 +515,11 @@ function bindShell() {
   $('#logoutBtn').onclick = async () => { await api('POST', '/api/logout'); location.reload(); };
 }
 function nav(v) {
+  if (typeof v === 'string' && v.startsWith('lnk-')) {
+    const li = findLinkItem(v);
+    if (!li) return;
+    if (li.mode === 'new') { window.open(li.url, '_blank', 'noopener'); return; }
+  }
   state.view = v; state.cur = null;
   try { localStorage.setItem('sd-view', v); } catch (e) {}
   $('#app').innerHTML = shell('');
@@ -419,7 +638,9 @@ async function drawSecrets() {
     }
     gmap.get(key).items.push(s);
   });
+  const secretMap = {};
   const entryHTML = s => {
+    secretMap[s.id] = s.value || '';
     const uname = s.kind === 'account' && s.username
       ? `<div class="smeta">账号：<code>${esc(s.username)}</code></div>` : '';
     const ei = expInfo(s);
@@ -427,7 +648,7 @@ async function drawSecrets() {
     <div class="srow sub" data-id="${s.id}">
       <div class="grow">
         ${uname}
-        <div class="sval" data-val="${esc(s.value)}">••••••••</div>
+        <div class="sval">••••••••</div>
         <div class="smeta">添加于 ${fmtDate(s.createdAt)}${s.note ? ' · ' + esc(s.note) : ''}${ei ? ' · <span class="' + ei.cls + '">' + ei.text + '</span>' : ''}</div>
       </div>
       <div class="acts">
@@ -450,7 +671,7 @@ async function drawSecrets() {
   $$('.srow', box).forEach(row => {
     const id = +row.dataset.id;
     const valEl = $('.sval', row);
-    const real = valEl.dataset.val;
+    const real = secretMap[id] || '';
     let shown = false;
     $('[data-act="reveal"]', row).onclick = e => {
       shown = !shown;
@@ -461,17 +682,6 @@ async function drawSecrets() {
     $('[data-act="edit"]', row).onclick = async () => {
       const s = (await api('GET', '/api/secrets?merchantId=' + state.cur.id)).find(x => x.id === id);
       secretModal(s, s.kind);
-    };
-    $('[data-act="move"]', row).onclick = async () => {
-      const nn = await api('GET', '/api/notes/' + id);
-      openModal(`<h3>移动到分类</h3>
-        <div class="frow"><select id="nCatMv">${noteState.cats.map(c => `<option value="${c.id}"${c.id === nn.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
-        <div class="foot"><button class="btn ghost" data-close>取消</button>
-        <button class="btn" id="cfMv">移动</button></div>`);
-      $('#cfMv').onclick = async () => {
-        await api('PUT', '/api/notes/' + id, { categoryId: +$('#nCatMv').value });
-        closeModal(); toast('已移动'); loadNotes();
-      };
     };
     $('[data-act="del"]', row).onclick = () => {
       openModal(`<h3>删除这条机密？</h3><p class="muted">删除后无法恢复。</p>
@@ -640,6 +850,7 @@ async function renderSettings() {
     <div class="tabs">
       <button class="tab ${settingsTab === 'tg' ? 'active' : ''}" data-t="tg">${ic('bot')} TG 机器人</button>
       <button class="tab ${settingsTab === 'backup' ? 'active' : ''}" data-t="backup">${ic('download')} 备份</button>
+      <button class="tab ${settingsTab === 'browser' ? 'active' : ''}" data-t="browser">${ic('globe')} 远程浏览器</button>
       <button class="tab ${settingsTab === 'audit' ? 'active' : ''}" data-t="audit">${ic('shield')} 安全日志</button>
       <button class="tab ${settingsTab === 'clear' ? 'active' : ''}" data-t="clear">${ic('trash')} 清理数据</button>
       <button class="tab ${settingsTab === 'pwd' ? 'active' : ''}" data-t="pwd">${ic('lock')} 修改密码</button>
@@ -649,6 +860,7 @@ async function renderSettings() {
   $$('.tab', v).forEach(t => t.onclick = () => { settingsTab = t.dataset.t; renderSettings(); });
   if (settingsTab === 'tg') await renderTgSettings();
   else if (settingsTab === 'backup') await renderBackupSettings();
+  else if (settingsTab === 'browser') await renderBrowserSettings();
   else if (settingsTab === 'clear') await renderClearData();
   else if (settingsTab === 'pwd') await renderChangePwd();
   else if (settingsTab === 'sec') await renderSecSettings();
@@ -983,6 +1195,236 @@ async function totpSetupFlow() {
   $('#totpCode').onkeydown = e => { if (e.key === 'Enter') $('#totpConfirm').click(); };
 }
 
+async function renderBrowserSettings() {
+  const s = await api('GET', '/api/settings');
+  $('#setBody').innerHTML = `
+  <div class="card"><h3>${ic('globe')} 远程浏览器</h3>
+    <p class="muted" style="font-size:13px">在别的服务器上部署 neko（网页版浏览器），填入地址和密码并启用后，侧边栏顶部会出现「远程浏览器」菜单。浏览器跑在远程服务器上，用的是那边的网络出口。点开菜单自动登录，无需再次输入密码。</p>
+    <label class="check"><input type="checkbox" id="brEn" ${s.browser_enabled === '1' ? 'checked' : ''}> 启用远程浏览器</label>
+    <div class="field"><label>浏览器地址（https:// 开头）</label>
+      <input id="brUrl" value="${esc(s.browser_url || '')}" placeholder="https://neko.example.com"></div>
+    <div class="field"><label>浏览器密码（neko 登录密码，加密存储）</label>
+      <input id="brPwd" type="password" autocomplete="off" value="${esc(s.browserPwd || '')}" placeholder="neko 的用户密码"></div>
+    <button class="btn" id="brSave">${ic('check')} 保存</button>
+  </div>`;
+  $('#brSave').onclick = async () => {
+    const url = $('#brUrl').value.trim();
+    const pwd = $('#brPwd').value;
+    if ($('#brEn').checked && !url) { toast('请先填写浏览器地址', true); return; }
+    if (url && !/^https?:\/\//i.test(url)) { toast('地址必须以 http(s):// 开头', true); return; }
+    try {
+      await api('PUT', '/api/settings', {
+        browser_enabled: $('#brEn').checked ? '1' : '0',
+        browser_url: url,
+        browserPwd: pwd,
+      });
+      toast('已保存');
+      await loadBrowserCfg();
+      $('#app').innerHTML = shell('');
+      bindShell();
+      await renderSettings();
+    } catch (e) { toast('保存失败：' + e.message, true); }
+  };
+}
+
+/* ---------- sidebar inline menu editing ---------- */
+function editModeItems() {
+  const byId = {};
+  for (const m of MENU_ITEMS) byId[m.id] = m;
+  return menuCfg.order.map(id => byId[id]).filter(m => m && !m.foot);
+}
+function toggleFolder(id) {
+  if (openFolders.has(id)) openFolders.delete(id); else openFolders.add(id);
+  try { localStorage.setItem('sd-open-folders', JSON.stringify([...openFolders])); } catch (e) {}
+  renderSidebar();
+}
+async function fetchMenuIcon(id, url) {
+  try {
+    await api('POST', '/api/menu-icon', { id, url });
+    await loadBrowserCfg();
+    renderSidebar();
+  } catch (e) { /* keep the generic icon */ }
+}
+let iconBackfillDone = false;
+async function backfillMenuIcons() {
+  if (iconBackfillDone) return;
+  iconBackfillDone = true;
+  const missing = menuCfg.links.filter(l => !l.icon);
+  for (const l of missing.slice(0, 30)) {
+    try { await api('POST', '/api/menu-icon', { id: l.id, url: l.url }); } catch (e) {}
+  }
+  if (missing.length) { await loadBrowserCfg(); renderSidebar(); }
+}
+function toggleEditMode() {
+  state.editMode = !state.editMode;
+  if (state.editMode) {
+    state.sbCollapsed = false; // editing needs room; don't persist this
+  } else {
+    try { state.sbCollapsed = localStorage.getItem('sd-sb-collapsed') === '1'; } catch (e) { state.sbCollapsed = false; }
+  }
+  renderSidebar();
+}
+function renderSidebar() {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = shell('');
+  $('.sidebar').replaceWith(tmp.firstElementChild);
+  bindShell();
+}
+async function menuEditSave() {
+  try {
+    await api('PUT', '/api/settings', {
+      menu_order: JSON.stringify(menuCfg.order.filter(id => !MENU_FOOT_IDS.includes(id))),
+      menu_hidden: JSON.stringify(menuCfg.hidden),
+      menu_links: JSON.stringify(menuCfg.links),
+      menu_folders: JSON.stringify(menuCfg.folders),
+      menu_custom_order: JSON.stringify(menuCfg.customOrder),
+    });
+    await loadBrowserCfg();
+    renderSidebar();
+  } catch (e) { toast('保存失败：' + e.message, true); }
+}
+function swapIn(arr, id, dir) {
+  const i = arr.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= arr.length) return false;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  return true;
+}
+function menuEditAct(act, id) {
+  const link = menuCfg.links.find(x => x.id === id);
+  const folder = menuCfg.folders.find(x => x.id === id);
+  if (act === 'edit' && link) { openLinkDialog(link); return; }
+  if (act === 'rename' && folder) { openFolderDialog(folder); return; }
+  if (act === 'delfolder' && folder) { confirmDeleteFolder(folder); return; }
+  if (act === 'eye') {
+    const h = menuCfg.hidden.indexOf(id);
+    if (h >= 0) menuCfg.hidden.splice(h, 1); else menuCfg.hidden.push(id);
+    menuEditSave();
+    return;
+  }
+  if (act !== 'up' && act !== 'down') return;
+  const dir = act === 'up' ? -1 : 1;
+  if (folder || (link && !link.folder)) {
+    if (!swapIn(menuCfg.customOrder, id, dir)) return;
+  } else if (link && link.folder) {
+    const sibs = menuCfg.links.filter(l => l.folder === link.folder);
+    const i = sibs.findIndex(l => l.id === link.id);
+    const j = i + dir;
+    if (j < 0 || j >= sibs.length) return;
+    const a = menuCfg.links.indexOf(sibs[i]);
+    const b = menuCfg.links.indexOf(sibs[j]);
+    [menuCfg.links[a], menuCfg.links[b]] = [menuCfg.links[b], menuCfg.links[a]];
+  } else {
+    if (!swapIn(menuCfg.order, id, dir)) return;
+  }
+  menuEditSave();
+}
+function openFolderDialog(folder) {
+  openModal(`<h3>${folder ? '重命名文件夹' : '新建文件夹'}</h3>
+    <div class="field"><label>名称</label><input id="fldName" value="${esc(folder ? folder.name : '')}" maxlength="40" placeholder="文件夹名字"></div>
+    <div class="foot"><button class="btn ghost" data-close>取消</button>
+    <button class="btn" id="fldOk">${ic('check')} 确定</button></div>`);
+  $('#fldOk').onclick = () => {
+    const name = $('#fldName').value.trim();
+    if (!name) { toast('请填写名称', true); return; }
+    if (folder) { folder.name = name.slice(0, 40); }
+    else {
+      const f = { id: 'fld-' + Date.now(), name: name.slice(0, 40) };
+      menuCfg.folders.push(f);
+      menuCfg.customOrder.push(f.id);
+    }
+    closeModal();
+    menuEditSave();
+  };
+}
+function confirmDeleteFolder(folder) {
+  const n = menuCfg.links.filter(l => l.folder === folder.id).length;
+  openModal(`<h3>删除文件夹「${esc(folder.name)}」？</h3>
+    <p class="muted">${n ? `里面的 ${n} 个链接会移到根目录，不会被删除。` : '文件夹是空的。'}</p>
+    <div class="foot"><button class="btn ghost" data-close>取消</button>
+    <button class="btn" id="fldDel" style="color:var(--danger)">${ic('trash')} 删除</button></div>`);
+  $('#fldDel').onclick = () => {
+    menuCfg.links.filter(l => l.folder === folder.id).forEach(l => {
+      l.folder = '';
+      if (!menuCfg.customOrder.includes(l.id)) menuCfg.customOrder.push(l.id);
+    });
+    menuCfg.folders = menuCfg.folders.filter(x => x.id !== folder.id);
+    menuCfg.customOrder = menuCfg.customOrder.filter(x => x !== folder.id);
+    menuCfg.hidden = menuCfg.hidden.filter(x => x !== folder.id);
+    closeModal();
+    menuEditSave();
+  };
+}
+function openLinkDialog(link) {
+  const folderOpts = `<option value="">根目录</option>` + menuCfg.folders.map(f =>
+    `<option value="${f.id}"${link && link.folder === f.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('');
+  openModal(`<h3>${link ? '编辑链接' : '添加链接'}</h3>
+    <div class="field"><label>从我的网址里选（可选）</label><select id="lkdPick" style="width:100%"><option value="">加载中…</option></select></div>
+    <div class="field"><label>名称</label><input id="lkdName" value="${esc(link ? link.label : '')}" placeholder="菜单显示的名字"></div>
+    <div class="field"><label>网址（http(s):// 开头）</label><input id="lkdUrl" value="${esc(link ? link.url : '')}" placeholder="https://example.com"></div>
+    <div class="row2">
+      <div class="field"><label>打开方式</label><select id="lkdMode" style="width:100%">
+        <option value="embed"${!link || link.mode !== 'new' ? ' selected' : ''}>站内右侧打开</option>
+        <option value="new"${link && link.mode === 'new' ? ' selected' : ''}>新窗口打开</option>
+      </select></div>
+      <div class="field"><label>所在文件夹</label><select id="lkdFolder" style="width:100%">${folderOpts}</select></div>
+    </div>
+    <div class="foot"><button class="btn ghost" data-close>取消</button>
+    ${link ? '<button class="btn ghost" id="lkdDel" style="color:var(--danger)">删除</button>' : ''}
+    <button class="btn" id="lkdOk">${ic('check')} 确定</button></div>`);
+  api('GET', '/api/links').then(list => {
+    const sel = $('#lkdPick');
+    if (!sel) return;
+    const items = Array.isArray(list) ? list : [];
+    if (!items.length) { sel.innerHTML = '<option value="">网址里还没有保存的网址</option>'; return; }
+    sel.innerHTML = '<option value="">— 选择一个已保存的网址 —</option>' + items.map((l, i) => `<option value="${i}">${esc(l.name || l.url)}</option>`).join('');
+    sel.onchange = () => {
+      if (sel.value === '') return;
+      const it = items[Number(sel.value)];
+      if (!it) return;
+      $('#lkdName').value = String(it.name || '').slice(0, 40);
+      let u = String(it.url || '').trim();
+      if (u && !/^https?:\/\//i.test(u)) u = 'https://' + u;
+      $('#lkdUrl').value = u;
+    };
+  }).catch(() => { const sel = $('#lkdPick'); if (sel) sel.innerHTML = '<option value="">加载失败</option>'; });
+  $('#lkdOk').onclick = () => {
+    const label = $('#lkdName').value.trim();
+    const url = $('#lkdUrl').value.trim();
+    const mode = $('#lkdMode').value === 'new' ? 'new' : 'embed';
+    const folderVal = $('#lkdFolder').value;
+    const folder = menuCfg.folders.some(f => f.id === folderVal) ? folderVal : '';
+    if (!label) { toast('请填写名称', true); return; }
+    if (!/^https?:\/\//i.test(url)) { toast('网址必须以 http(s):// 开头', true); return; }
+    if (link) {
+      const wasRoot = !link.folder;
+      link.label = label; link.url = url; link.mode = mode; link.folder = folder;
+      if (wasRoot && folder) menuCfg.customOrder = menuCfg.customOrder.filter(x => x !== link.id);
+      if (!wasRoot && !folder && !menuCfg.customOrder.includes(link.id)) menuCfg.customOrder.push(link.id);
+    } else {
+      const nl = { id: 'lnk-' + Date.now(), label, url, mode, folder };
+      menuCfg.links.push(nl);
+      if (!folder) menuCfg.customOrder.push(nl.id);
+    }
+    closeModal();
+    const _id = link ? link.id : menuCfg.links[menuCfg.links.length - 1].id;
+    const _url = url;
+    menuEditSave().then(() => fetchMenuIcon(_id, _url));
+  };
+  const del = $('#lkdDel');
+  if (del) del.onclick = () => {
+    menuCfg.links = menuCfg.links.filter(x => x.id !== link.id);
+    menuCfg.customOrder = menuCfg.customOrder.filter(x => x !== link.id);
+    menuCfg.hidden = menuCfg.hidden.filter(x => x !== link.id);
+    closeModal();
+    menuEditSave();
+  };
+}
+
+
+
+
+
 async function renderBackupSettings() {
   const s = await api('GET', '/api/settings');
   $('#setBody').innerHTML = `
@@ -1313,17 +1755,6 @@ async function drawLinks() {
     const l = list.find(x => x.id === id);
     $('[data-act="preview"]', row).onclick = () => openLinkPreview(l);
     $('[data-act="edit"]', row).onclick = () => startInlineEdit(row, l);
-    $('[data-act="move"]', row).onclick = async () => {
-      const nn = await api('GET', '/api/notes/' + id);
-      openModal(`<h3>移动到分类</h3>
-        <div class="frow"><select id="nCatMv">${noteState.cats.map(c => `<option value="${c.id}"${c.id === nn.categoryId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
-        <div class="foot"><button class="btn ghost" data-close>取消</button>
-        <button class="btn" id="cfMv">移动</button></div>`);
-      $('#cfMv').onclick = async () => {
-        await api('PUT', '/api/notes/' + id, { categoryId: +$('#nCatMv').value });
-        closeModal(); toast('已移动'); loadNotes();
-      };
-    };
     $('[data-act="del"]', row).onclick = () => {
       openModal(`<h3>删除这个网址？</h3><p class="muted">删除后无法恢复。</p>
         <div class="foot"><button class="btn ghost" data-close>取消</button>
@@ -1957,8 +2388,38 @@ async function refreshMerchants() {
   try { state.merchants = await api('GET', '/api/merchants'); }
   catch (e) { state.merchants = []; }
 }
+/* ---------- remote browser view ---------- */
+function renderBrowser() {
+  const v = $('#view');
+  if (!browserCfg.enabled || !browserCfg.url) {
+    v.innerHTML = `<div class="empty"><div>远程浏览器未启用</div><div class="muted" style="font-size:12px;margin-top:6px">请在设置 → 远程浏览器中配置并启用</div></div>`;
+    return;
+  }
+  const sep = browserCfg.url.includes('?') ? '&' : '?';
+  let src = browserCfg.url;
+  if (browserCfg.pwd) src += `${sep}pwd=${encodeURIComponent(browserCfg.pwd)}&usr=${encodeURIComponent('SecretDock')}`;
+  v.innerHTML = `<iframe src="${esc(src)}" style="width:100%;height:100vh;border:0;display:block;" allow="clipboard-read; clipboard-write" title="远程浏览器"></iframe>`;
+  v.style.cssText = 'position:absolute;inset:0;padding:0;margin:0;max-width:none;';
+  const main = v.closest('.main');
+  if (main) main.style.cssText = 'padding:0;max-width:none;position:relative;';
+}
+function renderLinkView() {
+  const v = $('#view');
+  const li = findLinkItem(state.view);
+  if (!li) { state.view = 'merchants'; renderView(); return; }
+  v.innerHTML = `<iframe src="${esc(li.url)}" style="width:100%;height:100vh;border:0;display:block;" title="${esc(li.label)}"></iframe>`;
+  v.style.cssText = 'position:absolute;inset:0;padding:0;margin:0;max-width:none;';
+  const main = v.closest('.main');
+  if (main) main.style.cssText = 'padding:0;max-width:none;position:relative;';
+}
 async function renderView() {
+  const v = $('#view');
+  if (v) v.style.cssText = '';
+  const main = v ? v.closest('.main') : null;
+  if (main) main.style.cssText = '';
   if (state.view === 'settings') await renderSettings();
+  else if (state.view === 'browser') renderBrowser();
+  else if (typeof state.view === 'string' && state.view.startsWith('lnk-')) renderLinkView();
   else if (state.view === 'scripts') await renderScripts();
   else if (state.view === 'links') await renderLinks();
   else if (state.view === 'notes') await renderNotes();
@@ -2132,10 +2593,11 @@ async function boot() {
   try { localStorage.getItem('x'); } catch (e) {}
   const theme = (() => { try { return localStorage.getItem('sd-theme'); } catch (e) { return null; } })();
   const savedView = (() => { try { return localStorage.getItem('sd-view'); } catch (e) { return null; } })();
-  if (savedView && ['merchants', 'scripts', 'links', 'notes', 'images', 'files', 'nodes', 'reminders', 'ssh', 'tghelp', 'settings'].includes(savedView)) {
+  if (savedView && ['merchants', 'scripts', 'links', 'notes', 'images', 'files', 'nodes', 'reminders', 'ssh', 'tghelp', 'settings', 'browser'].includes(savedView)) {
     state.view = savedView;
   }
   document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+  state.sbCollapsed = (() => { try { return localStorage.getItem('sd-sb-collapsed') === '1'; } catch (e) { return false; } })();
   // 检查是否需要初始设置
   try {
     const st = await api('GET', '/api/setup/status', undefined, { noReload: true });
@@ -2145,10 +2607,14 @@ async function boot() {
     await api('GET', '/api/me', undefined, { noReload: true });
     state.authed = true;
   } catch (e) { state.authed = false; renderLogin(); return; }
+  await loadBrowserCfg();
+  // 如果浏览器未启用但记住了 browser 视图，回退到机密库
+  if (state.view === 'browser' && !browserCfg.enabled) state.view = 'merchants';
   $('#app').innerHTML = shell('');
   bindShell();
   await refreshMerchants();
   await renderView();
+  backfillMenuIcons();
 }
 document.addEventListener('DOMContentLoaded', boot);
 

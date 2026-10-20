@@ -342,6 +342,10 @@ var settingKeys = []string{
 	// login security
 	"sec_enabled", "sec_countries", "sec_ip_whitelist", "sec_ip_blacklist",
 	"sec_totp_enabled", "sec_tg_alert",
+	// remote browser (neko)
+	"browser_url", "browser_enabled", "browser_pwd_enc",
+	// sidebar menu (order & visibility)
+	"menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order",
 }
 
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
@@ -352,6 +356,14 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			v := s.DB.GetSetting(k)
 			if k == "bot_token_enc" {
 				out["botTokenSet"] = boolStr(v != "")
+				continue
+			}
+			if k == "browser_pwd_enc" {
+				if v != "" {
+					if dec, err := crypto.Decrypt(s.EncKey, v); err == nil {
+						out["browserPwd"] = string(dec)
+					}
+				}
 				continue
 			}
 			if k == "query_pwd_hash" {
@@ -399,7 +411,19 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 				_ = s.DB.SetSetting("bot_token_enc", enc)
 			}
 		}
-		for _, k := range []string{"admin_chat_id", "auto_delete_minutes", "query_pwd_max_tries", "tg_idle_wipe_minutes", "reminder_default_times", "backup_enabled", "backup_time", "backup_keep", "backup_dir"} {
+		if pwd, ok := req["browserPwd"]; ok {
+			if pwd == "" {
+				_ = s.DB.SetSetting("browser_pwd_enc", "")
+			} else {
+				enc, err := crypto.Encrypt(s.EncKey, []byte(pwd))
+				if err != nil {
+					fail(w, 500, err.Error())
+					return
+				}
+				_ = s.DB.SetSetting("browser_pwd_enc", enc)
+			}
+		}
+		for _, k := range []string{"admin_chat_id", "auto_delete_minutes", "query_pwd_max_tries", "tg_idle_wipe_minutes", "reminder_default_times", "backup_enabled", "backup_time", "backup_keep", "backup_dir", "browser_url", "browser_enabled", "menu_order", "menu_hidden", "menu_links", "menu_folders", "menu_custom_order"} {
 			if v, ok := req[k]; ok {
 				_ = s.DB.SetSetting(k, v)
 			}
