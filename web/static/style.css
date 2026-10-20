@@ -408,7 +408,7 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 .ssh-minbar { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 6px 14px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.15); font-size: 13px; }
 .ssh-minbar:hover { transform: translateX(-4px); }
 /* 布局：左窄右宽，窗口紧凑 */
-.ssh-win { width: 950px; max-width: calc(100vw - 40px); height: 620px; max-height: calc(100vh - 40px); overflow: hidden; display: flex; flex-direction: column; }
+.ssh-win { width: 950px; max-width: calc(100vw - 40px); height: 620px; max-height: calc(100dvh - 40px); overflow: hidden; display: flex; flex-direction: column; }
 .ssh-win-body { padding: 6px 8px; }
 .ssh-pane-body { gap: 6px; padding: 6px 8px; }
 #sshCloseMenu { position: fixed; z-index: 10000; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
@@ -424,8 +424,8 @@ button svg, .tab svg, .card h3 svg, .field label svg, .hint svg, .tag svg,
 .ssh-win-body { padding: 8px 10px; }
 #sshTermEl { border-width: 1px; }
 
-.modal.wide.ssh-modal { max-width: calc(100vw - 20px); width: auto; padding: 0 !important; overflow: hidden; margin: 0; }
-.modal.wide.ssh-modal .ssh-win { width: 1150px; max-width: 100%; height: 850px; max-height: calc(100vh - 40px); }
+.modal.wide.ssh-modal { max-width: 100%; width: auto; padding: 0 !important; overflow: hidden; margin: 0; }
+.modal.wide.ssh-modal .ssh-win { width: 1150px; max-width: 100%; height: min(850px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); }
 .modal-bg { padding: 20px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
 
 
