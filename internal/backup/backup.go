@@ -120,6 +120,8 @@ type SSHHostData struct {
 	KeyPass   string `json:"keyPass,omitempty"`
 	Country   string `json:"country,omitempty"`
 	Region    string `json:"region,omitempty"`
+	ExpiryDate string `json:"expiryDate,omitempty"`
+	VendorURL string `json:"vendorUrl,omitempty"`
 	OsID      string `json:"osId,omitempty"`
 	OsVersion string `json:"osVersion,omitempty"`
 	Category  string `json:"category"`
@@ -331,6 +333,7 @@ func Collect(database *db.DB, encKey []byte, opts BackupOptions) (*ExportFile, e
 					Name: h.Name, Host: h.Host, Port: h.Port, Username: h.Username,
 					Password: pw, PrivKey: privKey, KeyPass: keyPass, Country: h.Country, Region: h.Region,
 					OsID: h.OsID, OsVersion: h.OsVersion, Category: names[h.CategoryID],
+					ExpiryDate: h.ExpiryDate, VendorURL: h.VendorURL,
 					CreatedAt: h.CreatedAt,
 				})
 			}
@@ -653,7 +656,7 @@ func applyImport(database *db.DB, encKey, payload []byte, opts BackupOptions) (i
 				keyPassEnc = kp
 			}
 		}
-		id, err := database.CreateSSHHost(catID, hd.Name, hd.Host, hd.Port, hd.Username, enc, keyEnc, keyPassEnc, hd.Country, hd.Region)
+		id, err := database.CreateSSHHost(catID, hd.Name, hd.Host, hd.Port, hd.Username, enc, keyEnc, keyPassEnc, hd.Country, hd.Region, hd.ExpiryDate, hd.VendorURL)
 		if err != nil {
 			return count, err
 		}

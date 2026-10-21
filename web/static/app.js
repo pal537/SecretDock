@@ -33,6 +33,7 @@ const ICONS = {
   tag: '<path d="M20.59 13.41L11 3.83A2 2 0 0 0 9.59 3.24H4a1 1 0 0 0-1 1v5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.59-4.59a2 2 0 0 0 0-2.83z"/><circle cx="7.5" cy="7.5" r="1"/>',
   code: '<path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/>',
   link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14L21 3"/>',
   share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/>',
   note: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>',
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
@@ -3473,6 +3474,17 @@ function fmtNet(kbs) {
   return kbs.toFixed(1) + 'K/s';
 }
 
+function sshExpiryBadge(h) {
+  if (!h.hasExpiry || h.daysLeft > 30) return '';
+  let cls, txt;
+  if (h.daysLeft < 0) { cls = 'crit'; txt = `已过期${-h.daysLeft}天`; }
+  else if (h.daysLeft === 0) { cls = 'crit'; txt = '今天到期'; }
+  else if (h.daysLeft <= 3) { cls = 'crit'; txt = `剩${h.daysLeft}天`; }
+  else if (h.daysLeft <= 7) { cls = 'soon'; txt = `剩${h.daysLeft}天`; }
+  else { cls = 'warn'; txt = `剩${h.daysLeft}天`; }
+  return `<button class="exp-badge ${cls}" data-act="renew" title="点击续费，更新到期日">${ic('clock')} ${txt}</button>`;
+}
+
 function drawSSHHosts() {
   const el = $('#sshList');
   if (!sshState.list.length) {
@@ -3487,11 +3499,13 @@ function drawSSHHosts() {
           <b>${esc(h.name || h.host)}</b>
           <small class="muted">${esc(h.host)}:${h.port}</small>
         </div>
+        ${sshExpiryBadge(h)}
         ${sshStatusDot(h)}
       </div>
       ${h.osId ? `<div style="position:absolute;right:10px;bottom:10px">${osLogo(h.osId, h.osVersion)}</div>` : ''}
       <div class="ssh-card-actions">
         <button class="btn sm" data-act="connect">${ic('terminal')} 连接</button>
+        ${h.vendorUrl ? `<button class="btn ghost sm" data-act="vendor" title="打开商家页面">${ic('external')}</button>` : ''}
         <button class="btn ghost sm" data-act="edit">${ic('edit')}</button>
         <button class="btn ghost sm danger" data-act="del">${ic('trash')}</button>
       </div>
@@ -3500,6 +3514,10 @@ function drawSSHHosts() {
     const id = +card.dataset.id;
     const h = sshState.list.find(x => x.id === id);
     card.querySelector('[data-act="connect"]').onclick = () => sshConnect(h);
+    const renewBtn = card.querySelector('[data-act="renew"]');
+    if (renewBtn) renewBtn.onclick = () => sshRenewModal(h);
+    const vendorBtn = card.querySelector('[data-act="vendor"]');
+    if (vendorBtn) vendorBtn.onclick = () => window.open(h.vendorUrl, '_blank', 'noopener');
     card.querySelector('[data-act="edit"]').onclick = () => sshModal(h);
     card.querySelector('[data-act="del"]').onclick = async () => {
       if (!confirm(`删除主机 ${h.name || h.host}？`)) return;
@@ -3540,8 +3558,13 @@ function sshModal(h) {
     ${isEdit && h.hasKey ? `<div style="margin-bottom:12px"><label style="font-size:13px;font-weight:400;color:var(--text)"><input type="checkbox" id="sshClearKey" style="width:auto;margin-right:6px">清除已保存的私钥</label></div>` : ''}
     <div class="frow"><label>国家</label><input id="sshCountry" value="${esc(h?.country || '')}" placeholder="如 中国 / 美国 / CN / US"></div>
     <div class="frow"><label>地区</label><input id="sshRegion" value="${esc(h?.region || '')}" placeholder="如 西雅图 / 圣何塞"></div>
+    <div class="frow"><label>到期日</label><input id="sshExpiry" type="date" value="${h?.expiryDate || ''}"></div>
+    ${isEdit && h.hasExpiry ? `<div style="margin:-4px 0 12px"><button class="btn ghost sm" id="sshRenewBtn">${ic('refresh')} 已续费（更新到期日）</button></div>` : ''}
+    <div class="frow"><label>商家链接</label><input id="sshVendor" value="${esc(h?.vendorUrl || '')}" placeholder="商家控制台链接，如 https://console.xxx"></div>
     <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">保存</button></div>`);
   $('#mCancel').onclick = closeModal;
+  const renewBtn2 = $('#sshRenewBtn');
+  if (renewBtn2) renewBtn2.onclick = () => { closeModal(); sshRenewModal(h); };
   const keyFileBtn = $('#sshKeyFileBtn');
   if (keyFileBtn) keyFileBtn.onclick = () => $('#sshKeyFile').click();
   const keyFileInput = $('#sshKeyFile');
@@ -3569,6 +3592,8 @@ function sshModal(h) {
       clearKey: !!($('#sshClearKey') && $('#sshClearKey').checked),
       country: $('#sshCountry').value.trim(),
       region: $('#sshRegion').value.trim(),
+      expiryDate: $('#sshExpiry').value,
+      vendorUrl: $('#sshVendor').value.trim(),
     };
     if (!data.host) return toast('请填写主机', 'err');
     if (!isEdit && !data.password && !data.privKey) return toast('密码和私钥至少填一个', 'err');
@@ -3576,6 +3601,54 @@ function sshModal(h) {
       if (isEdit) await api('PUT', `/api/ssh-hosts/${h.id}`, data);
       else await api('POST', '/api/ssh-hosts', data);
       closeModal(); loadSSHHosts(); toast('已保存');
+    } catch (e) { toast('保存失败', 'err'); }
+  };
+}
+
+function sshRenewModal(h) {
+  const cur = h.expiryDate;
+  const parse = s => new Date(s + 'T00:00:00Z');
+  const fmt = d => d.toISOString().slice(0, 10);
+  const addDays = (s, n) => { const d = parse(s); d.setUTCDate(d.getUTCDate() + n); return fmt(d); };
+  // 加月份必须做月末截断：1月31日+1月应是2月28/29日，而不是溢出到3月
+  const addMonths = (s, n) => {
+    const d = parse(s);
+    const day = d.getUTCDate();
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() + n);
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    d.setUTCDate(Math.min(day, lastDay));
+    return fmt(d);
+  };
+  const addYears = (s, n) => addMonths(s, n * 12);
+  let suggestion;
+  if (h.expiryPrev) {
+    const days = Math.round((parse(cur) - parse(h.expiryPrev)) / 86400000);
+    suggestion = days > 0 ? addDays(cur, days) : addYears(cur, 1);
+  } else {
+    suggestion = addYears(cur, 1);
+  }
+  const left = h.daysLeft < 0 ? `已过期 ${-h.daysLeft} 天` : h.daysLeft === 0 ? '今天到期' : `还剩 ${h.daysLeft} 天`;
+  openModal(`<h3>已续费 · ${esc(h.name || h.host)}</h3>
+    <p class="muted" style="margin:0 0 12px;font-size:13px">当前到期日 ${esc(cur)}（${left}）。把续费后的新到期日填进来，标记和 TG 提醒会按新日期重新安排。</p>
+    <div class="frow"><label>新到期日</label><input id="renewDate" type="date" value="${suggestion}"></div>
+    <div id="renewChips" style="display:flex;gap:8px;margin:-2px 0 14px">
+      <button class="btn ghost sm" data-add="m1">+1 个月</button>
+      <button class="btn ghost sm" data-add="m3">+3 个月</button>
+      <button class="btn ghost sm" data-add="y1">+1 年</button>
+    </div>
+    <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">保存</button></div>`);
+  $('#mCancel').onclick = closeModal;
+  $$('#renewChips [data-add]').forEach(b => b.onclick = () => {
+    const k = b.dataset.add;
+    $('#renewDate').value = k === 'm1' ? addMonths(cur, 1) : k === 'm3' ? addMonths(cur, 3) : addYears(cur, 1);
+  });
+  $('#mOk').onclick = async () => {
+    const v = $('#renewDate').value;
+    if (!v) return toast('请选择日期', 'err');
+    try {
+      await api('POST', `/api/ssh-hosts/${h.id}/renew`, { expiryDate: v });
+      closeModal(); loadSSHHosts(); toast('已续费，下次到期 ' + v);
     } catch (e) { toast('保存失败', 'err'); }
   };
 }

@@ -185,6 +185,7 @@ func NewService(database *db.DB, encKey []byte, dataDir string) *Service {
 	}
 	go svc.idleLoop()
 	go svc.remindLoop()
+	go svc.expiryLoop()
 	return svc
 }
 
@@ -3124,7 +3125,7 @@ func (s *Service) handleSSHNameReply(client *Client, chatID int64, p *pending, t
 		return
 	}
 	uncatID, _ := s.db.FindOrCreateSSHCategory("")
-	id, err := s.db.CreateSSHHost(uncatID, name, p.sshHost, p.sshPort, p.sshUser, p.sshPassEnc, "", "", "", "")
+	id, err := s.db.CreateSSHHost(uncatID, name, p.sshHost, p.sshPort, p.sshUser, p.sshPassEnc, "", "", "", "", "", "")
 	if err != nil {
 		id2, _ := client.SendMessage(chatID, "保存失败: "+err.Error(), "", nil)
 		s.trackBot(chatID, id2)

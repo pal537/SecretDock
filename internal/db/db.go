@@ -278,7 +278,7 @@ func Open(path string) (*DB, error) {
 		return nil, err
 	}
 	// ssh_hosts 加 region/os_id/os_version 列
-	for _, col := range []string{"region", "os_id", "os_version", "privkey_enc", "keypass_enc"} {
+	for _, col := range []string{"region", "os_id", "os_version", "privkey_enc", "keypass_enc", "expiry_date", "expiry_prev", "vendor_url", "expiry_notify"} {
 		var n int
 		_ = sqldb.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('ssh_hosts') WHERE name = '`+col+`'`).Scan(&n)
 		if n == 0 {
@@ -2071,6 +2071,12 @@ type SSHHost struct {
 	HasKey      bool   `json:"hasKey"`
 	Country     string `json:"country"`
 	Region      string `json:"region"`
+	ExpiryDate  string `json:"expiryDate"` // 到期日 YYYY-MM-DD，空=不提醒
+	ExpiryPrev  string `json:"expiryPrev"` // 上一个到期日（续费间隔推算用）
+	VendorURL   string `json:"vendorUrl"`  // 商家页面链接
+	ExpiryNotify string `json:"-"`         // 到期提醒分级状态 JSON，不返回前端
+	HasExpiry   bool   `json:"hasExpiry"`
+	DaysLeft    int    `json:"daysLeft"` // 按北京时间今天算的剩余天数（HasExpiry 时有效）
 	OsID        string `json:"osId"`
 	OsVersion   string `json:"osVersion"`
 	LastStatus  string `json:"lastStatus"`
@@ -2152,9 +2158,34 @@ func (d *DB) DeleteSSHCategory(id int64) error {
 	return err
 }
 
-func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region string) (int64, error) {
-	r, err := d.Exec(`INSERT INTO ssh_hosts (category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, catID, name, host, port, username, passwordEnc, privKeyEnc, keyPassEnc, country, region, time.Now().Unix())
+func shanghaiLoc() *time.Location {
+	loc, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		return time.FixedZone("CST", 8*3600)
+	}
+	return loc
+}
+
+// fillSSHExpiry 按北京时间的"今天"计算剩余天数等展示字段。
+func fillSSHExpiry(h *SSHHost) {
+	h.HasExpiry = false
+	h.DaysLeft = 0
+	if h.ExpiryDate == "" {
+		return
+	}
+	exp, err := time.ParseInLocation("2006-01-02", h.ExpiryDate, shanghaiLoc())
+	if err != nil {
+		return
+	}
+	now := time.Now().In(shanghaiLoc())
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, shanghaiLoc())
+	h.HasExpiry = true
+	h.DaysLeft = int(exp.Sub(today).Hours() / 24)
+}
+
+func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region, expiryDate, vendorURL string) (int64, error) {
+	r, err := d.Exec(`INSERT INTO ssh_hosts (category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, expiry_date, vendor_url, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, catID, name, host, port, username, passwordEnc, privKeyEnc, keyPassEnc, country, region, expiryDate, vendorURL, time.Now().Unix())
 	if err != nil {
 		return 0, err
 	}
@@ -2164,7 +2195,7 @@ func (d *DB) CreateSSHHost(catID int64, name, host string, port int, username, p
 func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 	var rows *sql.Rows
 	var err error
-	q := `SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at FROM ssh_hosts`
+	q := `SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, expiry_date, expiry_prev, vendor_url, expiry_notify, os_id, os_version, last_status, last_latency, last_check_at, created_at FROM ssh_hosts`
 	if catID == 0 {
 		rows, err = d.Query(q + ` ORDER BY created_at DESC`)
 	} else {
@@ -2177,10 +2208,11 @@ func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 	out := []SSHHost{}
 	for rows.Next() {
 		var h SSHHost
-		if err := rows.Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt); err != nil {
+		if err := rows.Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.ExpiryDate, &h.ExpiryPrev, &h.VendorURL, &h.ExpiryNotify, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt); err != nil {
 			return nil, err
 		}
 		h.HasKey = h.PrivKeyEnc != ""
+		fillSSHExpiry(&h)
 		out = append(out, h)
 	}
 	return out, nil
@@ -2188,17 +2220,24 @@ func (d *DB) ListSSHHosts(catID int64) ([]SSHHost, error) {
 
 func (d *DB) GetSSHHost(id int64) (SSHHost, error) {
 	var h SSHHost
-	err := d.QueryRow(`SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, os_id, os_version, last_status, last_latency, last_check_at, created_at
-		FROM ssh_hosts WHERE id = ?`, id).Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt)
+	err := d.QueryRow(`SELECT id, category_id, name, host, port, username, password_enc, privkey_enc, keypass_enc, country, region, expiry_date, expiry_prev, vendor_url, expiry_notify, os_id, os_version, last_status, last_latency, last_check_at, created_at
+		FROM ssh_hosts WHERE id = ?`, id).Scan(&h.ID, &h.CategoryID, &h.Name, &h.Host, &h.Port, &h.Username, &h.PasswordEnc, &h.PrivKeyEnc, &h.KeyPassEnc, &h.Country, &h.Region, &h.ExpiryDate, &h.ExpiryPrev, &h.VendorURL, &h.ExpiryNotify, &h.OsID, &h.OsVersion, &h.LastStatus, &h.LastLatency, &h.LastCheckAt, &h.CreatedAt)
 	h.HasKey = h.PrivKeyEnc != ""
+	fillSSHExpiry(&h)
 	return h, err
 }
 
 // UpdateSSHHost 更新主机。passwordEnc/privKeyEnc 为空表示不改对应凭据；
 // privKeyEnc 非空时 keyPassEnc 随私钥一同保存（可为空）；clearKey 为 true 时清除已存私钥与口令。
-func (d *DB) UpdateSSHHost(id, catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region string, clearKey bool) error {
-	sets := "category_id=?, name=?, host=?, port=?, username=?, country=?, region=?"
-	args := []any{catID, name, host, port, username, country, region}
+// 到期日发生变化时，旧日期记入 expiry_prev（供续费推算间隔）并清空提醒状态重新分级。
+func (d *DB) UpdateSSHHost(id, catID int64, name, host string, port int, username, passwordEnc, privKeyEnc, keyPassEnc, country, region, expiryDate, vendorURL string, clearKey bool) error {
+	old, _ := d.GetSSHHost(id)
+	sets := "category_id=?, name=?, host=?, port=?, username=?, country=?, region=?, expiry_date=?, vendor_url=?"
+	args := []any{catID, name, host, port, username, country, region, expiryDate, vendorURL}
+	if expiryDate != old.ExpiryDate {
+		sets += ", expiry_prev=?, expiry_notify=''"
+		args = append(args, old.ExpiryDate)
+	}
 	if passwordEnc != "" {
 		sets += ", password_enc=?"
 		args = append(args, passwordEnc)
@@ -2211,6 +2250,22 @@ func (d *DB) UpdateSSHHost(id, catID int64, name, host string, port int, usernam
 	}
 	args = append(args, id)
 	_, err := d.Exec(`UPDATE ssh_hosts SET `+sets+` WHERE id=?`, args...)
+	return err
+}
+
+// RenewSSHHost 续费：旧到期日存入 expiry_prev，新日期生效，提醒状态清零重新分级。
+func (d *DB) RenewSSHHost(id int64, newDate string) error {
+	old, err := d.GetSSHHost(id)
+	if err != nil {
+		return err
+	}
+	_, err = d.Exec(`UPDATE ssh_hosts SET expiry_prev=?, expiry_date=?, expiry_notify='' WHERE id=?`, old.ExpiryDate, newDate, id)
+	return err
+}
+
+// SetSSHHostExpiryNotify 保存到期提醒的分级状态（JSON），由 TG 到期检查器调用。
+func (d *DB) SetSSHHostExpiryNotify(id int64, state string) error {
+	_, err := d.Exec(`UPDATE ssh_hosts SET expiry_notify=? WHERE id=?`, state, id)
 	return err
 }
 

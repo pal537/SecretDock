@@ -75,6 +75,24 @@ func (s *Server) handleSSHCategoryOne(w http.ResponseWriter, r *http.Request) {
 
 // ============ SSH 主机 ============
 
+// validExpiryDate 校验到期日格式（空字符串视为未设置，合法）。
+func validExpiryDate(s string) bool {
+	if s == "" {
+		return true
+	}
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
+}
+
+// normVendorURL 规范化商家链接：没写协议头时补 https://。
+func normVendorURL(s string) string {
+	s = strings.TrimSpace(s)
+	if s != "" && !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+		s = "https://" + s
+	}
+	return s
+}
+
 func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
@@ -97,6 +115,8 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 			KeyPass    string `json:"keyPass"`
 			Country    string `json:"country"`
 			Region     string `json:"region"`
+			ExpiryDate string `json:"expiryDate"`
+			VendorURL  string `json:"vendorUrl"`
 		}
 		if err := readJSON(r, &req); err != nil {
 			fail(w, 400, "参数错误")
@@ -109,6 +129,10 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.Password == "" && strings.TrimSpace(req.PrivKey) == "" {
 			fail(w, 400, "密码和私钥至少填一个")
+			return
+		}
+		if !validExpiryDate(strings.TrimSpace(req.ExpiryDate)) {
+			fail(w, 400, "到期日格式不对")
 			return
 		}
 		if req.Port <= 0 || req.Port > 65535 {
@@ -143,7 +167,7 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 				keyPassEnc = kp
 			}
 		}
-		id, err := s.DB.CreateSSHHost(req.CategoryID, strings.TrimSpace(req.Name), req.Host, req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region))
+		id, err := s.DB.CreateSSHHost(req.CategoryID, strings.TrimSpace(req.Name), req.Host, req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region), strings.TrimSpace(req.ExpiryDate), normVendorURL(req.VendorURL))
 		if err != nil {
 			fail(w, 500, err.Error())
 			return
@@ -155,7 +179,34 @@ func (s *Server) handleSSHHosts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSSHHostOne(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(strings.TrimPrefix(r.URL.Path, "/api/ssh-hosts/"), 10, 64)
+	rest := strings.TrimPrefix(r.URL.Path, "/api/ssh-hosts/")
+	parts := strings.SplitN(rest, "/", 2)
+	id, _ := strconv.ParseInt(parts[0], 10, 64)
+	// POST /api/ssh-hosts/{id}/renew：续费，设置新到期日
+	if len(parts) == 2 && parts[1] == "renew" {
+		if r.Method != "POST" {
+			fail(w, 405, "不支持")
+			return
+		}
+		var req struct {
+			ExpiryDate string `json:"expiryDate"`
+		}
+		if err := readJSON(r, &req); err != nil || req.ExpiryDate == "" || !validExpiryDate(req.ExpiryDate) {
+			fail(w, 400, "到期日格式不对")
+			return
+		}
+		if err := s.DB.RenewSSHHost(id, req.ExpiryDate); err != nil {
+			fail(w, 500, err.Error())
+			return
+		}
+		h, err := s.DB.GetSSHHost(id)
+		if err != nil {
+			fail(w, 500, "读取失败")
+			return
+		}
+		ok(w, h)
+		return
+	}
 	switch r.Method {
 	case "PUT":
 		var req struct {
@@ -170,9 +221,15 @@ func (s *Server) handleSSHHostOne(w http.ResponseWriter, r *http.Request) {
 			ClearKey   bool   `json:"clearKey"` // true 清除已存私钥
 			Country    string `json:"country"`
 			Region     string `json:"region"`
+			ExpiryDate string `json:"expiryDate"`
+			VendorURL  string `json:"vendorUrl"`
 		}
 		if err := readJSON(r, &req); err != nil {
 			fail(w, 400, "参数错误")
+			return
+		}
+		if !validExpiryDate(strings.TrimSpace(req.ExpiryDate)) {
+			fail(w, 400, "到期日格式不对")
 			return
 		}
 		enc := ""
@@ -201,7 +258,7 @@ func (s *Server) handleSSHHostOne(w http.ResponseWriter, r *http.Request) {
 				keyPassEnc = kp
 			}
 		}
-		if err := s.DB.UpdateSSHHost(id, req.CategoryID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Host), req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region), req.ClearKey); err != nil {
+		if err := s.DB.UpdateSSHHost(id, req.CategoryID, strings.TrimSpace(req.Name), strings.TrimSpace(req.Host), req.Port, req.Username, enc, keyEnc, keyPassEnc, strings.TrimSpace(req.Country), strings.TrimSpace(req.Region), strings.TrimSpace(req.ExpiryDate), normVendorURL(req.VendorURL), req.ClearKey); err != nil {
 			fail(w, 500, err.Error())
 			return
 		}
