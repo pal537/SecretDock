@@ -26,10 +26,18 @@ SecretDock is a self-hosted secret manager for developers and power users. The f
 **🖼️ Images / 📁 Files** — Upload, organize, and share via secure expiring links (`/s/xxxx`)
 
 **🖥️ SSH Manager** — Connect to your servers right from the browser (web terminal + SFTP file browser)
+- Password & key-based login (private keys encrypted at rest, passphrase supported, password fallback)
+- One-click script library: categorized install / benchmark / network scripts — click to paste into the terminal, never auto-runs; fully editable
+- **VPS expiry radar**: set an expiry date per host and get color-coded badges (yellow ≤30d, orange ≤7d, red ≤3d / overdue), one-click renew with smart next-date suggestions (+1/+3/+6 months, +1 year), and tiered Telegram alerts (30/7/3/1 days, on the day, then daily while overdue) until you mark it renewed
+- Optional vendor console link per host, one click from the host card
 
 **📡 Node Subscriptions** — Parse and test proxy subscription links (vless/vmess/trojan/ss/hysteria/tuic/wireguard…)
 
 **⏰ Reminders** — Schedule recurring notifications via Telegram
+
+**🤖 AI Assistant** — Multi-provider AI chat built in (any OpenAI-compatible API), with web search, conversation search, and image/video generation saved straight into your vault
+
+**🌐 Remote Browser** — A full cloud browser (neko) embedded in the web UI, for browsing from your server
 
 **🤖 Telegram Bot** — The killer feature:
 - **Add** secrets/scripts/links/notes/images/files by simply sending them to the bot
@@ -94,10 +102,18 @@ SecretDock 是一个自托管的机密管理器，为开发者和重度用户打
 **🖼️ 图片 / 📁 文件** — 上传整理，通过安全分享链接分享（`/s/xxxx`）
 
 **🖥️ SSH 管理** — 直接在浏览器里连服务器（网页终端 + SFTP 文件管理）
+- 密码 + 私钥登录（私钥加密存储，支持口令，密码兜底）
+- 一键脚本库：装机/测速/线路等分类脚本，点一下粘贴进终端（不自动回车），可自由增删改
+- **VPS 到期雷达**：给每台主机设到期日，卡片上分级徽章提醒（≤30 天黄 / ≤7 天橙 / ≤3 天及过期红，只显示标记不显示日期）；点徽章一键续费（按上次周期自动建议新日期，+1/+3/+6 个月、+1 年快捷选择）；TG 在 30/7/3/1 天、到期当天分级提醒，过期后每天提醒，直到你确认续费
+- 每台主机可填商家控制台链接，卡片上一键直达
 
 **📡 订阅节点** — 解析测试代理订阅链接（vless/vmess/trojan/ss/hysteria/tuic/wireguard…）
 
 **⏰ 提醒** — 定时 Telegram 推送提醒
+
+**🤖 AI 助手** — 内置多商家 AI 对话（任意 OpenAI 兼容接口），支持联网搜索、会话搜索，图片/视频生成自动转存进库
+
+**🌐 远程浏览器** — 内置远程浏览器（neko），在网页里开一个跑在服务器上的完整浏览器上网
 
 **🤖 Telegram 机器人** — 核心功能：
 - **录入**：直接把内容发给机器人，自动识别分类入库
