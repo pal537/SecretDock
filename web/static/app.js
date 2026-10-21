@@ -3635,13 +3635,14 @@ function sshRenewModal(h) {
     <div id="renewChips" style="display:flex;gap:8px;margin:-2px 0 14px">
       <button class="btn ghost sm" data-add="m1">+1 个月</button>
       <button class="btn ghost sm" data-add="m3">+3 个月</button>
+      <button class="btn ghost sm" data-add="m6">+6 个月</button>
       <button class="btn ghost sm" data-add="y1">+1 年</button>
     </div>
     <div class="mfoot"><button class="btn ghost" id="mCancel">取消</button><button class="btn" id="mOk">保存</button></div>`);
   $('#mCancel').onclick = closeModal;
   $$('#renewChips [data-add]').forEach(b => b.onclick = () => {
     const k = b.dataset.add;
-    $('#renewDate').value = k === 'm1' ? addMonths(cur, 1) : k === 'm3' ? addMonths(cur, 3) : addYears(cur, 1);
+    $('#renewDate').value = k === 'm1' ? addMonths(cur, 1) : k === 'm3' ? addMonths(cur, 3) : k === 'm6' ? addMonths(cur, 6) : addYears(cur, 1);
   });
   $('#mOk').onclick = async () => {
     const v = $('#renewDate').value;
