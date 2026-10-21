@@ -3898,6 +3898,7 @@ const SSH_SCRIPT_DEFAULTS = [
   { cat: '代理', name: 'v2ray-agent', note: '八合一', cmd: 'wget -P /root -N --no-check-certificate "https://raw.githubusercontent.com/mack-a/v2ray-agent/master/install.sh" && chmod 700 /root/install.sh && /root/install.sh' },
   { cat: '代理', name: 'mtproxy', note: '中文mtg代理', cmd: 'rm -rf /home/mtproxy && mkdir /home/mtproxy && cd /home/mtproxy && curl -fsSL -o mtproxy.sh https://github.com/ellermister/mtproxy/raw/master/mtproxy.sh && bash mtproxy.sh' },
   { cat: '代理', name: '9seconds', note: 'mtg代理', cmd: 'SECRET=$(docker run --rm nineseconds/mtg:2 generate-secret --hex google.com) && docker run -d --name mtg --restart=always -p 8443:443 nineseconds/mtg:2 simple-run 0.0.0.0:443 $SECRET && IP=$(curl -fsSL https://checkip.amazonaws.com) && echo "https://t.me/proxy?server=$IP&port=8443&secret=$SECRET"' },
+  { cat: '代理', name: 'Hysteria2', note: 'hy2官方一键', cmd: 'bash <(curl -fsSL https://get.hy2.sh/)' },
   { cat: '测速体检', name: 'NodeQuality', note: 'vps测试', cmd: 'bash <(curl -sL https://run.NodeQuality.com)' },
   { cat: '测速体检', name: 'NetQuality', note: '网络质量体检', cmd: 'bash <(curl -Ls https://Check.Place) -N' },
   { cat: '测速体检', name: 'HardwareQuality', note: '硬件质量体检', cmd: 'bash <(curl -Ls https://Check.Place) -H' },
