@@ -278,6 +278,14 @@ func (s *Service) idleLoop() {
 	}
 }
 
+// touchActive records admin activity for the idle-wipe clock. Every update
+// from the admin chat counts — text messages and button taps alike. (Before
+// this, only photos and callbacks refreshed the clock, so an active text
+// conversation looked "idle" and the sweep ate live drafts and replies.)
+func (s *Service) touchActive(chatID int64) {
+	_ = s.db.SetSetting(fmt.Sprintf("tg_last_active_%d", chatID), strconv.FormatInt(time.Now().Unix(), 10))
+}
+
 // idleTimeout returns the configured idle-wipe timeout (default 5 minutes).
 func (s *Service) idleTimeout() time.Duration {
 	if v, err := strconv.Atoi(strings.TrimSpace(s.db.GetSetting("tg_idle_wipe_minutes"))); err == nil && v > 0 {
@@ -295,15 +303,22 @@ func (s *Service) idleSweep() {
 	now := time.Now().Unix()
 	client := NewClient(token)
 	for _, chatID := range s.db.ListTgChats() {
-		last, _ := strconv.ParseInt(s.db.GetSetting(fmt.Sprintf("tg_last_active_%d", chatID)), 10, 64)
-		// no activity record (e.g. messages from before this feature): wipe them
-		if last == 0 || now-last > int64(timeout.Seconds()) {
+		lastKey := fmt.Sprintf("tg_last_active_%d", chatID)
+		last, _ := strconv.ParseInt(s.db.GetSetting(lastKey), 10, 64)
+		if last == 0 {
+			// No activity record. Start the clock instead of wiping:
+			// wipe resets this to 0, so wiping on 0 loops forever and
+			// eats fresh messages on every tick.
+			_ = s.db.SetSetting(lastKey, strconv.FormatInt(now, 10))
+			continue
+		}
+		if now-last > int64(timeout.Seconds()) {
 			n := len(s.db.ListTgMessages(chatID))
 			if n == 0 {
 				continue
 			}
 			s.wipe(client, chatID)
-			_ = s.db.SetSetting(fmt.Sprintf("tg_last_active_%d", chatID), "0")
+			_ = s.db.SetSetting(lastKey, "0")
 			log.Printf("tg: idle wipe chat %d (%d messages, idle %ds)", chatID, n, now-last)
 		}
 	}
@@ -528,6 +543,7 @@ func (s *Service) handleUpdate(client *Client, adminChat int64, u Update) {
 		if cb.Message == nil || cb.Message.Chat.ID != adminChat {
 			return
 		}
+		s.touchActive(adminChat)
 		s.handleCallback(client, adminChat, cb)
 		return
 	}
@@ -535,6 +551,7 @@ func (s *Service) handleUpdate(client *Client, adminChat int64, u Update) {
 	if m == nil || m.Chat.ID != adminChat {
 		return
 	}
+	s.touchActive(adminChat)
 	if len(m.Photo) > 0 {
 		s.handlePhoto(client, adminChat, m)
 		return
@@ -1102,6 +1119,8 @@ func (s *Service) doAddConfirm(client *Client, chatID int64) {
 	p := s.pending[chatID]
 	s.mu.Unlock()
 	if p == nil || p.kind != pAddConfirm {
+		mid, _ := client.SendMessage(chatID, "⚠️ 这一步已过期（草稿已失效），请重新发送内容", "", nil)
+		s.trackBot(chatID, mid)
 		return
 	}
 	merchantID := p.merchantID
@@ -1566,6 +1585,11 @@ func (s *Service) handleCallback(client *Client, chatID int64, cb *CallbackQuery
 	p := s.pending[chatID]
 	s.mu.Unlock()
 	if p == nil {
+		// Add-flow buttons with no live draft used to die silently here.
+		if data == "add:ok" || data == "m:new" || strings.HasPrefix(data, "m:use:") {
+			mid, _ := client.SendMessage(chatID, "⚠️ 这一步已过期（草稿已失效），请重新发送内容", "", nil)
+			s.trackBot(chatID, mid)
+		}
 		return
 	}
 	switch {
@@ -1573,12 +1597,14 @@ func (s *Service) handleCallback(client *Client, chatID int64, cb *CallbackQuery
 		id, _ := strconv.ParseInt(strings.TrimPrefix(data, "m:use:"), 10, 64)
 		p.kind = pAddConfirm
 		p.merchantID = id
+		p.expires = time.Now().Add(10 * time.Minute)
 		if m, err := s.db.GetMerchant(id); err == nil {
 			s.sendAddConfirm(client, chatID, m.Name, false)
 		}
 	case data == "m:new":
 		p.kind = pAddConfirm
 		p.merchantID = 0
+		p.expires = time.Now().Add(10 * time.Minute)
 		s.sendAddConfirm(client, chatID, p.merchantName, true)
 	case data == "m:cancel" || data == "add:no" || data == "q:cancel" || data == "node:cancel":
 		s.wipe(client, chatID)
