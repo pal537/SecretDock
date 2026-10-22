@@ -528,8 +528,57 @@ func scriptJSON(sc *db.Script, content string) map[string]interface{} {
 	}
 }
 
-// handleScripts: GET /api/scripts — list all (no content).
+// handleScripts: GET /api/scripts — list all (no content);
+// POST /api/scripts — create from web (same name detection as the TG intake).
 func (s *Server) handleScripts(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		var req struct {
+			Name       string `json:"name"`
+			Content    string `json:"content"`
+			CategoryID int64  `json:"categoryId"`
+		}
+		if err := readJSON(r, &req); err != nil || strings.TrimSpace(req.Content) == "" {
+			fail(w, 400, "内容不能为空")
+			return
+		}
+		content := req.Content
+		name := strings.TrimSpace(req.Name)
+		ver, desc, author := "", "", ""
+		if meta, isUser := tg.ParseUserScript(content); isUser {
+			ver, desc, author = meta.Version, meta.Description, meta.Author
+			if name == "" {
+				name = meta.Name
+			}
+		}
+		if name == "" {
+			det := tg.DetectScriptName(content)
+			name, content = det.Name, det.Content
+		}
+		if name == "" {
+			fail(w, 400, "没识别出脚本名称，请填写名称")
+			return
+		}
+		if len([]rune(name)) > 60 {
+			name = string([]rune(name)[:60])
+		}
+		catID := req.CategoryID
+		if catID == 0 {
+			catID, _ = s.DB.FindOrCreateScriptCategory("")
+		}
+		enc, err := crypto.Encrypt(s.EncKey, []byte(content))
+		if err != nil {
+			fail(w, 500, err.Error())
+			return
+		}
+		id, err := s.DB.CreateScript(name, ver, desc, author, enc, catID)
+		if err != nil {
+			fail(w, 500, err.Error())
+			return
+		}
+		s.DB.Audit("script_create", "name="+name, clientIP(r))
+		ok(w, map[string]interface{}{"id": id})
+		return
+	}
 	if r.Method != "GET" {
 		fail(w, 405, "method not allowed")
 		return

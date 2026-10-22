@@ -1629,6 +1629,28 @@ function openScriptModal(sc) {
   };
 }
 
+function openScriptForm() {
+  const opts = scriptState.cats.map(c =>
+    `<option value="${c.id}" ${c.id === scriptState.cur ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+  openModal(`<h3>添加脚本</h3>
+    <div class="frow"><label>名称</label><input id="nsName" placeholder="留空则从脚本内容自动识别" maxlength="60"></div>
+    <div class="frow"><label>分类</label><select id="nsCat">${opts}</select></div>
+    <textarea id="nsContent" class="notearea codeview" style="min-height:260px" placeholder="粘贴脚本内容，油猴脚本会自动识别 @name、@version 等信息"></textarea>
+    <div class="foot"><button class="btn ghost" data-close>取消</button>
+    <button class="btn" id="nsSave">保存</button></div>`);
+  $('#nsSave').onclick = async () => {
+    const content = $('#nsContent').value;
+    if (!content.trim()) { toast('内容不能为空', true); return; }
+    const cid = +$('#nsCat').value;
+    try {
+      await api('POST', '/api/scripts', { name: $('#nsName').value.trim(), content, categoryId: cid });
+    } catch (e) { toast(e.message || '保存失败', true); return; }
+    closeModal(); toast('已保存');
+    if (cid !== scriptState.cur) { scriptState.cur = cid; drawScriptCatBar(); }
+    loadScripts();
+  };
+}
+
 /* ---------- links view ---------- */
 let linkState = { cats: [], cur: 0, sel: new Set(), selectMode: false, sort: 'new' };
 let nodeState = { cats: [], cur: 0, list: [], testing: false };
@@ -2446,9 +2468,11 @@ async function renderScripts() {
       <span style="flex:1"></span>
       ${sortSelHTML('new')}
       <span class="muted" style="font-size:12px">TG 里第一行发"脚本"粘贴入库</span>
+      <button class="btn sm" id="addScript">${ic('plus')} 添加脚本</button>
     </div>
     <div class="catbar" id="scriptCatBar"></div>
     <div id="scriptList"><div class="empty"><div>加载中…</div></div></div>`;
+  $('#addScript').onclick = () => openScriptForm();
   try { scriptState.cats = await api('GET', '/api/script-categories'); } catch (e) { scriptState.cats = []; }
   drawScriptCatBar();
   await loadScripts();
@@ -2521,7 +2545,7 @@ async function loadScripts() {
 function paintScripts(list) {
   const box = $('#scriptList');
   if (!list.length) {
-    box.innerHTML = `<div class="empty">${ic('code')}<div>还没有脚本，去 TG 粘贴一个吧</div></div>`;
+    box.innerHTML = `<div class="empty">${ic('code')}<div>还没有脚本，点「添加脚本」或去 TG 粘贴</div></div>`;
     return;
   }
   box.innerHTML = `<div class="card" style="padding:4px 14px">` + list.map(c => `
