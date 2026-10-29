@@ -1,5 +1,13 @@
 # SecretDock 安装说明
 
+## 零、一键安装（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pal537/SecretDock/main/install.sh | bash
+```
+
+缺 Docker 会先装 Docker，然后拉取预编译镜像并跑起来，数据存在 `./data/`。重装、升级不会动已有数据。
+
 ## 一、环境要求
 
 - Docker 20.10+ 和 Docker Compose v2
@@ -10,8 +18,8 @@
 
 ```bash
 # 1. 克隆代码
-git clone https://github.com/<you>/secretdock.git
-cd secretdock
+git clone https://github.com/pal537/SecretDock.git
+cd SecretDock
 
 # 2. 启动（首次启动约 1-2 分钟编译）
 docker compose up -d --build

@@ -110,7 +110,13 @@ SecretDock is a self-hosted secret manager for developers and power users. The f
 
 ### 🚀 Quick Start (Docker)
 
-**Option A: Prebuilt image (fastest)**
+**One-liner (fastest — installs Docker if missing)**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pal537/SecretDock/main/install.sh | bash
+```
+
+**Option A: Prebuilt image (Docker already installed)**
 
 ```bash
 docker run -d --name secretdock \
@@ -185,6 +191,14 @@ SecretDock 是一个自托管的机密管理器，为开发者和重度用户打
 - **无追踪、无遥测、无云端** —— 数据不出你的服务器
 
 ### 🚀 快速开始（Docker）
+
+**一键安装（最快，缺 Docker 会先装 Docker）**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pal537/SecretDock/main/install.sh | bash
+```
+
+**从源码构建**
 
 ```bash
 git clone https://github.com/pal537/SecretDock.git
