@@ -6,6 +6,60 @@
 
 ---
 
+## Screenshots / 截图
+
+All screenshots below use demo data. 以下截图均为演示数据。
+
+**SSH 主机管理 / SSH host management**
+
+![SSH](docs/screenshots/ssh.png)
+
+**机密库 / Secrets vault**
+
+![机密库](docs/screenshots/vault.png)
+
+**AI 助手 / AI assistant**
+
+![AI](docs/screenshots/ai.png)
+
+**远程浏览器 / Remote browser**
+
+![远程浏览器](docs/screenshots/browser.png)
+
+**脚本 / Scripts**
+
+![脚本](docs/screenshots/scripts.png)
+
+**网址 / Links**
+
+![网址](docs/screenshots/links.png)
+
+**笔记 / Notes**
+
+![笔记](docs/screenshots/notes.png)
+
+**图片 / Images**
+
+![图片](docs/screenshots/images.png)
+
+**文件 / Files**
+
+![文件](docs/screenshots/files.png)
+
+**订阅节点 / Node subscriptions**
+
+![订阅节点](docs/screenshots/nodes.png)
+
+**提醒 / Reminders**
+
+![提醒](docs/screenshots/reminders.png)
+
+**设置 / Settings**
+
+![设置](docs/screenshots/settings.png)
+
+---
+
 ## English
 
 SecretDock is a self-hosted secret manager for developers and power users. The fastest way to save anything is through Telegram — just send it to the bot. Manage your servers via SSH right from the browser. Everything is encrypted, and everything stays on your server.
