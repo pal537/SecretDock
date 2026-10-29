@@ -4,6 +4,12 @@
 
 **你的个人机密库 —— 配了一个 Telegram 机器人当第二大脑。**
 
+**One-click install / 一键安装：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pal537/SecretDock/main/install.sh | bash
+```
+
 ---
 
 ## Screenshots / 截图
